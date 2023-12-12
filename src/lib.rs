@@ -46,17 +46,17 @@ use mls_rs::crypto::SignaturePublicKey;
 use mls_rs::crypto::SignatureSecretKey;
 
 #[derive(Debug)]
-struct PublicKey {
+pub struct PublicKey {
     public: SignaturePublicKey,
 }
 
 #[derive(Debug)]
-struct MLSError {
+pub struct MLSError {
     inner: MlsError,
 }
 
 #[derive(Debug)]
-struct KeyPackage {
+pub struct KeyPackage {
     keypackage: mls_rs::KeyPackage,
 }
 
@@ -136,7 +136,7 @@ pub struct SignatureKeypair {
     public: SignaturePublicKey,
 }
 
-fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypair, MLSError> {
+pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypair, MLSError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
