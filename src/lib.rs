@@ -1,27 +1,15 @@
-use mls_rs::{
-    client_builder::MlsConfig,
-    error::MlsError,
-    identity::{
-        basic::{BasicCredential, BasicIdentityProvider},
-        SigningIdentity,
-    },
-    CipherSuiteProvider, Client, CryptoProvider, ExtensionList,
-};
+use mls_rs::{CipherSuiteProvider, CryptoProvider};
 
+// Definition of the type for the CipherSuite
 pub use mls_rs::CipherSuite;
 
-// pub struct CipherSuite {
-//     cipher_suite: mls_rs::CipherSuite,
-// }
-
-// Assuming Version is an enum
+// Definition of the protocol version
 #[derive(Debug)]
 pub enum Version {
     MlsVersion10,
-    // Add more versions as needed
 }
 
-// Assuming GroupContextExtensions is a struct
+// Definition of the GroupContext Extensions
 #[derive(Debug)]
 pub struct GroupContextExtensions {
     // Add fields as needed
@@ -30,105 +18,31 @@ pub struct GroupContextExtensions {
 // Assuming GroupConfig is a struct
 #[derive(Debug)]
 pub struct GroupConfig {
-    cs: CipherSuite,
-    v: Version,
+    ciphersuite: CipherSuite,
+    version: Version,
     options: Vec<GroupContextExtensions>,
-}
-
-// Assuming Error is an enum
-#[derive(Debug)]
-pub enum Error {
-    InvalidVersion,
-    // Add more error types as needed
 }
 
 use mls_rs::crypto::SignaturePublicKey;
 use mls_rs::crypto::SignatureSecretKey;
 
 #[derive(Debug)]
-pub struct PublicKey {
-    public: SignaturePublicKey,
-}
-
-#[derive(Debug)]
-pub struct MLSError {
-    inner: MlsError,
-}
-
-#[derive(Debug)]
 pub struct KeyPackage {
-    keypackage: mls_rs::KeyPackage,
+    kp: mls_rs::KeyPackage,
 }
 
-// Group configuration.
+#[derive(Debug)]
+pub struct MlsError {
+    error: mls_rs::error::MlsError,
+}
 
-// This is more or less only for Ciphersuites and GroupContext extensions
-// V8 - Update group context extensions
-// Discuss: do we want to pass the version number explicitly to avoid compat problems with future versions ? (likely yes)
-
-// # Parameters
-// external_sender
-// - Availibility of the external sender extension
-// - Default: None (We don't expose that)
-// required_capabilities
-// - Needed to specify extensions
-// - Option: None (Expose the ability to provide a 3-tuple of Vec<u8>)
-
-// fn mls_create_group_config(
-//     cs: Ciphersuite,
-//     v:Version,
-//     options: Vec<GroupContextExtensions>,
-//     ) -> Result<GroupConfig, Error> {
-//         unimplemented!()
-
-//     }
-
-//     // Note, external_sender is an Extension but other config options  might be different
-
-//     /**
-//     Client configuration.
-//     V8  - We could require the library to update the client configuration at runtime
-//     # Options
-//     WireFormatPolicy
-//     - Default: None (We don't expose that)
-//     padding_size
-//     - Default: to some to complete the block to 64 bytes (pick a good value)
-//     max_past_epochs
-//     - This is for application messages (cross-epoch)
-//     - Option: set the default some small value
-//     number_of_resumption_psks
-//     - Default: 0 (We don't expose that)
-//     use_ratchet_tree_extension
-//     - Option: default to true
-//     out_of_order_tolerance
-//     - This is within an epoch
-//     - Option: set the default to small number
-//     maximum_forward_distance
-//     - Maximum generation forward within an epoch from the same sender
-//     - Default: set to something like 1000 (Signal uses 2000)
-//     Lifetime
-//     - Lifetime of a keypackage
-//     - This is to indicate the amount of time before which an update needs to happen
-
-//     */
-//     fn mls_create_client_config(
-//     max_past_epoch:Option<u32>,
-//     use_ratchet_tree_extension:bool,
-//     out_of_order_tolerance:Option<u32>,
-//     maximum_forward_distance:Option<u32>,
-//     ) -> Result<ClientConfig, Error> {
-//         unimplemented!()
-//     }
-
-/**
-Generate Signature Key.
-- Option: default to Basic Credentials
-- Possibly use strings as the credential types have names
-- (Alternatively we could use integers)
-
-- If we were to use enums we coudn't extend the support to new opaque types in between changes to the SDK.
-
-*/
+/// Generate Signature Key Pair
+///
+/// - Option: default to Basic Credentials
+/// - Possibly use strings as the credential types have names
+/// - (Alternatively we could use integers)
+///
+/// If we were to use enums we couldn't extend the support to new opaque types in between changes to the SDK.
 
 #[derive(Debug)]
 pub struct SignatureKeypair {
@@ -136,7 +50,7 @@ pub struct SignatureKeypair {
     public: SignaturePublicKey,
 }
 
-pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypair, MLSError> {
+pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypair, MlsError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
@@ -146,34 +60,106 @@ pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypai
     Ok(SignatureKeypair { secret, public })
 }
 
-/*
-Generate a KeyPackage.
+/// Generate a KeyPackage.
+///
+/// This function generates a KeyPackage based on the provided GroupConfig and SignatureKey.
+///
+/// # Arguments
+/// - `group_config`: The configuration of the group.
+/// - `signature_key`: The signature key used for the KeyPackage.
+///
+/// # Returns
+/// - `Ok(KeyPackage)`: The generated KeyPackage.
+/// - `Err(MLSError)`: An error occurred during the generation process.
+///
 
-*/
+pub fn generate_key_package(
+    group_config: GroupConfig,
+    signature_keypair: SignatureKeypair,
+) -> Result<KeyPackage, MlsError> {
+    unimplemented!()
+}
 
-// fn mls_generate_keypackages(GroupConfig, SignatureKey)
-// -> Result<(KeyPackage), MLSError> {
-//     unimplemented!()
+/// Group configuration.
+///
+/// This is more or less only for Ciphersuites and GroupContext extensions
+/// V8 - Update group context extensions
+/// Discuss: do we want to pass the version number explicitly to avoid compat problems with future versions ? (likely yes)
+///
+/// # Parameters
+/// - `external_sender`: Availibility of the external sender extension
+///   - Default: None (We don't expose that)
+/// - `required_capabilities`: Needed to specify extensions
+///   - Option: None (Expose the ability to provide a 3-tuple of Vec<u8>)
+///
+/// Note, external_sender is an Extension but other config options  might be different
 
-// }
+fn mls_create_group_config(
+    cs: CipherSuite,
+    v: Version,
+    options: Vec<GroupContextExtensions>,
+) -> Result<GroupConfig, MlsError> {
+    Ok(GroupConfig {
+        ciphersuite: cs,
+        version: v,
+        options,
+    })
+}
 
-/*
-To create a group for one person.
+/// Client configuration.
+///
+/// V8  - We could require the library to update the client configuration at runtime
+/// Options:
+/// - WireFormatPolicy
+///     - Default: None (We don't expose that)
+/// - padding_size
+///     - Default: to some to complete the block to 64 bytes (pick a good value)
+/// - max_past_epochs
+///     - This is for application messages (cross-epoch)
+///     - Option: set the default some small value
+/// - number_of_resumption_psks
+///     - Default: 0 (We don't expose that)
+/// - use_ratchet_tree_extension
+///     - Option: default to true
+/// - out_of_order_tolerance
+///     - This is within an epoch
+///     - Option: set the default to small number
+/// - maximum_forward_distance
+///     - Maximum generation forward within an epoch from the same sender
+///     - Default: set to something like 1000 (Signal uses 2000)
+/// - Lifetime
+///     - Lifetime of a keypackage
+///     - This is to indicate the amount of time before which an update needs to happen
 
-Note: the groupState is kept track of by the lib and is not returned to the app. If at some point the app needs to get the MlsState, we'll support a getMlsState(GroupId) function.
+pub struct ClientConfig {
+    // Add fields as needed
+}
 
-Note: this function underneath will write down the GroupState in its persistent storage.
-*/
+fn mls_create_client_config(
+    max_past_epoch: Option<u32>,
+    use_ratchet_tree_extension: bool,
+    out_of_order_tolerance: Option<u32>,
+    maximum_forward_distance: Option<u32>,
+) -> Result<ClientConfig, MlsError> {
+    unimplemented!()
+}
 
-// fn mls_create_group(
-//     group_config: Option<GroupConfig>,
-//     gid: Option<GroupId>,
-//     self_: KeyPackage,
-//     psk: Option<Vec<u8>>
-//     ) -> Result<GroupId, MLSError> {
-//         unimplemented!()
+/// To create a group for one person.
+///
+/// Note: the groupState is kept track of by the lib and is not returned to the app. If at some point the app needs to get the MlsState, we'll support a getMlsState(GroupId) function.
+///
+/// Note: this function underneath will write down the GroupState in its persistent storage.
 
-//     }
+pub type GroupId = Vec<u8>;
+
+fn mls_create_group(
+    group_config: Option<GroupConfig>,
+    gid: Option<GroupId>,
+    self_: KeyPackage,
+    psk: Option<Vec<u8>>,
+) -> Result<GroupId, MlsError> {
+    unimplemented!()
+}
 
 /*
 Group management: Adding a user.
