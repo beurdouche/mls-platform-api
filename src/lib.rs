@@ -60,6 +60,16 @@ pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypai
     Ok(SignatureKeypair { secret, public })
 }
 
+///
+/// Generate a credential.
+///
+use mls_rs::identity::basic::BasicCredential;
+
+pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
+    let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
+    Ok(credential)
+}
+
 /// Generate a KeyPackage.
 ///
 /// This function generates a KeyPackage based on the provided GroupConfig and SignatureKey.
@@ -73,11 +83,21 @@ pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypai
 /// - `Err(MLSError)`: An error occurred during the generation process.
 ///
 
-pub fn generate_key_package(
+pub async fn generate_key_package(
     group_config: GroupConfig,
     signature_keypair: SignatureKeypair,
 ) -> Result<KeyPackage, MlsError> {
     unimplemented!()
+    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L430
+}
+
+///
+/// Validate a KeyPackage.
+///
+
+pub fn validate_key_package(key_package: KeyPackage) -> Result<(), MlsError> {
+    unimplemented!()
+    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/external_client.rs#L104
 }
 
 /// Group configuration.
@@ -94,7 +114,7 @@ pub fn generate_key_package(
 ///
 /// Note, external_sender is an Extension but other config options  might be different
 
-fn mls_create_group_config(
+pub fn mls_create_group_config(
     cs: CipherSuite,
     v: Version,
     options: Vec<GroupContextExtensions>,
@@ -135,7 +155,7 @@ pub struct ClientConfig {
     // Add fields as needed
 }
 
-fn mls_create_client_config(
+pub fn mls_create_client_config(
     max_past_epoch: Option<u32>,
     use_ratchet_tree_extension: bool,
     out_of_order_tolerance: Option<u32>,
@@ -146,130 +166,122 @@ fn mls_create_client_config(
 
 /// To create a group for one person.
 ///
-/// Note: the groupState is kept track of by the lib and is not returned to the app. If at some point the app needs to get the MlsState, we'll support a getMlsState(GroupId) function.
+/// Note: the groupState is kept track of by the lib and is not returned to the app.
+/// If at some point the app needs to get the MlsState, we'll support a getMlsState(GroupId) function.
 ///
 /// Note: this function underneath will write down the GroupState in its persistent storage.
 
 pub type GroupId = Vec<u8>;
 
-fn mls_create_group(
+pub fn mls_create_group(
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
     self_: KeyPackage,
     psk: Option<Vec<u8>>,
 ) -> Result<GroupId, MlsError> {
     unimplemented!()
+    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
+    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/group/mod.rs#L276
 }
 
-/*
-Group management: Adding a user.
+///
+/// Group management: Adding a user.
+///
+/// Two cases depending on access control from the app:
+///
+/// Case 1: the proposer can commit.
+/// Case 2: the proposer cannot commit, they can only propose.
+///
+/// The application should be able to decide this based on their access control
+/// either on client side or server side (eg the user X doesn't have permission
+/// to approve add requests to a groupID).
 
-Two cases depending on access control from the app:
+pub type MlsMessage = Vec<u8>;
 
-Case 1: the proposer can commit.
-Case 2: the proposer cannot commit, they can only propose.
+pub fn mls_add_user(
+    gid: GroupId,
+    user: KeyPackage,
+    myKeyPackage: KeyPackage,
+) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
 
-The application should be able to decide this based on their access control either on client side or server side (eg the user X doesn't have permission to approve add requests to a groupID).
+pub fn mls_propose_add_user(
+    gid: GroupId,
+    user: KeyPackage,
+    myKeyPackage: KeyPackage,
+) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
 
-*/
+///
+/// Group management: Removing a user.
+///
 
-// For Case 1:
-// fn mls_add_user(
-//     gid: GroupId,
-//     user: KeyPackage,
-//     myKeyPackage: KeyPackage
-//     ) -> Result<Message, MLSError> {
-//         unimplemented!()
+pub fn mls_rem_user(gid: GroupId, user: KeyPackage) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
 
-//     }
+pub fn mls_propose_rem_user(gid: GroupId, user: KeyPackage) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
 
-//     // For Case 2:
-//     fn mls_propose_add_user(
-//     gid: GroupId,
-//     user: KeyPackage,
-//     myKeyPackage: KeyPackage
-//     ) -> Result<Message, MLSError> {
-//         unimplemented!()
+///
+/// Key updates
+///
+/// Note: Everyone is able to propose and commit to their key update.
+///
 
-//     }
+pub fn mls_update(gid: GroupId) -> Result<MlsMessage, MlsError> {
+    // Propose + Commit
+    unimplemented!()
+}
 
-// For removing users, the API is the same as for adding.
+///
+/// Process a non-Welcome message from the app.
+///
+/// Note: when the higher level APIs (e.g., Java in case of Android) receives a message,
+/// it checks with the apps via callbacks whether the apps want to proceed with the message
+/// (e.g., if the message is a Commit, the app might not want to apply it due to ACL).
+/// That means the moment a message is passed down to this Rust layer, it'll be processed
+/// as prescribed by MLS:
+///  - A Proposal will result in a Commit.
+///  - A Commit will result in it being applied to advance the group state.
+///  - An application message will result in it being decrypted.
 
-// For Case 1:
-// fn mls_rem_user(
-// gid: GroupId,
-// user: KeyPackage
-// ) -> Result<Message, MLSError> {
-//     unimplemented!()
+fn mls_process_received_message(
+    gid: GroupId,
+    key_package: KeyPackage,
+    message: MlsMessage,
+) -> Result<(String), MlsError> {
+    unimplemented!()
 
-// }
+    // Internally the GroupState is updated.
+}
 
-// // For Case 2:
-// fn mls_propose_rem_user(
-// gid: GroupId,
-// user: KeyPackage
-// ) -> Result<Message, MLSError> {
-//     unimplemented!()
+///
+/// Process Welcome message.
+///
+/// Note: A Welcome will be processed to create a group object
+/// for the invited member.
+///
 
-// }
+pub struct RatchetTree {}
 
-// Key updates - everyone is able to propose and commit to their key update.
+fn mls_process_received_join_message(
+    gid: GroupId,
+    message: MlsMessage,
+    ratchet_tree: Option<RatchetTree>,
+) -> Result<(), MlsError> {
+    // Internally the GroupState is updated.
+    unimplemented!()
+}
 
-// fn mls_update(gid: GroupId) -> Result<Message, MLSError> {
-//     // Propose + Commit
-//     unimplemented!()
-
-// }
-
-/*
-Process a non-Welcome message from the app.
-
-Note: when the higher level APIs (e.g., Java in case of Android) receives a message, it checks with the apps via callbacks whether the apps want to proceed with the message (e.g., if the message is a Commit, the app might not want to apply it due to ACL). That means the moment a message is passed down to this Rust layer, it'll be processed as prescribed by MLS:
-A Proposal will result in a Commit.
-A Commit will result in it being applied to advance the group state.
-An application message will result in it being decrypted.
-*/
-
-// fn mls_process_received_message(gid: GroupId,keyPackage:KeyPackage, message: Message)
-//  -> Result<(String), MLSError> {
-//     unimplemented!()
-
-// // Internally the GroupState is updated.
-// }
-
-//
-// Process Welcome message from the app: A Welcome will be processed to create a group object for the invited member.
-//
-
-// fn mls_process_received_join_message(gid: GroupId, message: Message, ratchetTree:Option<RatchetTree>) -> Result<(), MLSError> {
-
-//     // Internally the GroupState is updated.
-//     unimplemented!()
-
-//     }
-
-//
-// Encrypt a message.
-//
-
-// fn mls_encrypt_message(gid: GroupId, myKeyPackage:KeyPackage, message: String) -> Result<Message, MLSError> {
-//     // Internally the GroupState is updated.
-//     unimplemented!()
-
-//     }
-
-//     // To leave the group
-// fn mls_leave(gid: GroupId, myKeyPackage:KeyPackage) -> Result<(), MLSError> {
-//     // Leave and zero out all the states: RemoveProposal
-//     unimplemented!()
-
-// }
-
-// fn mls_export(gid: GroupId, myKeyPackage:KeyPackage, label: String, epochNumber:Option<u32>) -> Result<(Exporter, u32),  MLSError> {
-//     // KDF of the secret of the current epoch.
-//     unimplemented!()
-
-// }
+// To leave the group
+pub fn mls_leave(gid: GroupId, my_key_package: KeyPackage) -> Result<(), MlsError> {
+    // Leave and zero out all the states: RemoveProposal
+    unimplemented!()
+}
 
 // // To close a group i.e., removing all members of the group.
 // fn mls_close(gid: GroupId) -> Result<bool, MLSError> {
@@ -278,14 +290,60 @@ An application message will result in it being decrypted.
 
 // }
 
-// // Get members of a group
-// fn mls_get_members(gid: GroupId)
-// -> Result<(Vec<Identifier>, Vec<KeyPackage>), MLSError> {
-//     unimplemented!()
+//
+// Encrypt a message.
+//
 
-// }
+pub fn mls_encrypt_message(
+    gid: GroupId,
+    my_key_package: KeyPackage,
+    message: String,
+) -> Result<MlsMessage, MlsError> {
+    // Internally the GroupState is updated.
+    unimplemented!()
+}
 
-// // With PublicGroupState + signatureKey + HPKE key one can rebuild the entire group state.
-// fn mls_get_group_states(gid:GroupID) -> Result<PublicGroupState, MLSError> {
-//     unimplemented!()
-// }
+///
+/// Get group members.
+///
+pub struct Identity {}
+
+pub fn mls_get_members(gid: GroupId) -> Result<(Vec<Identity>, Vec<KeyPackage>), MlsError> {
+    unimplemented!()
+}
+
+///
+/// Get the group state.
+///
+/// With PublicGroupState + signatureKey + HPKE key one can rebuild everything.
+
+pub struct PublicGroupState {}
+
+pub fn mls_get_group_states(gid: GroupId) -> Result<PublicGroupState, MlsError> {
+    unimplemented!()
+}
+
+///
+/// Export a group secret.
+///
+pub fn mls_export(
+    gid: GroupId,
+    my_key_package: KeyPackage,
+    label: String,
+    epoch_number: Option<u32>,
+) -> Result<(Vec<u8>, u32), MlsError> {
+    // KDF of the secret of the current epoch.
+    unimplemented!()
+}
+
+///
+/// Import a group state into the storage
+///
+pub fn mls_import_group_state(
+    group_state: Vec<u8>,
+    signature_key: SignatureKeypair,
+    my_key_package: KeyPackage,
+) -> Result<(), MlsError> {
+    unimplemented!()
+    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L605
+}
