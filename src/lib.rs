@@ -23,9 +23,6 @@ pub struct GroupConfig {
     options: Vec<GroupContextExtensions>,
 }
 
-use mls_rs::crypto::SignaturePublicKey;
-use mls_rs::crypto::SignatureSecretKey;
-
 #[derive(Debug)]
 pub struct KeyPackage {
     kp: mls_rs::KeyPackage,
@@ -36,13 +33,17 @@ pub struct MlsError {
     error: mls_rs::error::MlsError,
 }
 
+///
 /// Generate Signature Key Pair
 ///
 /// - Option: default to Basic Credentials
 /// - Possibly use strings as the credential types have names
 /// - (Alternatively we could use integers)
 ///
-/// If we were to use enums we couldn't extend the support to new opaque types in between changes to the SDK.
+/// If we were to use enums we couldn't extend the support to
+/// new opaque types in between changes to the SDK.
+use mls_rs::crypto::SignaturePublicKey;
+use mls_rs::crypto::SignatureSecretKey;
 
 #[derive(Debug)]
 pub struct SignatureKeypair {
