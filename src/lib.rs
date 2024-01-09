@@ -95,6 +95,7 @@ pub async fn generate_key_package(
 ///
 /// Validate a KeyPackage.
 ///
+/// We could internalize the KeyPackage validation in the Group operations.
 
 pub fn validate_key_package(key_package: KeyPackage) -> Result<(), MlsError> {
     unimplemented!()
@@ -171,14 +172,14 @@ pub fn mls_create_client_config(
 /// If at some point the app needs to get the MlsState, we'll support a getMlsState(GroupId) function.
 ///
 /// Note: this function underneath will write down the GroupState in its persistent storage.
-
+/// https://github.com/awslabs/mls-rs/blob/main/mls-rs-provider-sqlite/src/connection_strategy.rs
 pub type GroupId = Vec<u8>;
 
 pub fn mls_create_group(
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
-    self_: KeyPackage,
-    psk: Option<Vec<u8>>,
+    self_: KeyPackage, // SigningIdentity (The signing key will be fetched internally)
+                       // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
 ) -> Result<GroupId, MlsError> {
     unimplemented!()
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
@@ -202,7 +203,7 @@ pub type MlsMessage = Vec<u8>;
 pub fn mls_add_user(
     gid: GroupId,
     user: KeyPackage,
-    myKeyPackage: KeyPackage,
+    myIdentity: KeyPackage,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
@@ -210,7 +211,7 @@ pub fn mls_add_user(
 pub fn mls_propose_add_user(
     gid: GroupId,
     user: KeyPackage,
-    myKeyPackage: KeyPackage,
+    myIdentity: KeyPackage,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
@@ -233,6 +234,8 @@ pub fn mls_propose_rem_user(gid: GroupId, user: KeyPackage) -> Result<MlsMessage
 /// Note: Everyone is able to propose and commit to their key update.
 ///
 
+/// Should we rename that commit ?
+/// Possibly add a random nonce as an optional parameter.
 pub fn mls_update(gid: GroupId) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
     unimplemented!()
@@ -260,6 +263,8 @@ fn mls_process_received_message(
     // Internally the GroupState is updated.
 }
 
+// https://docs.rs/mls-rs/latest/mls_rs/group/mls_rules/trait.MlsRules.html#tymethod.filter_proposals
+
 ///
 /// Process Welcome message.
 ///
@@ -278,18 +283,26 @@ fn mls_process_received_join_message(
     unimplemented!()
 }
 
+pub struct ProposalType; //u16
+
+pub fn mls_send_custom_proposal(
+    proposal_type: ProposalType,
+    data: Vec<u8>,
+) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
+
 // To leave the group
 pub fn mls_leave(gid: GroupId, my_key_package: KeyPackage) -> Result<(), MlsError> {
     // Leave and zero out all the states: RemoveProposal
     unimplemented!()
 }
 
-// // To close a group i.e., removing all members of the group.
-// fn mls_close(gid: GroupId) -> Result<bool, MLSError> {
-//     // Remove everyone from the group.
-//     unimplemented!()
-
-// }
+// To close a group i.e., removing all members of the group.
+fn mls_close(gid: GroupId) -> Result<bool, MlsError> {
+    // Remove everyone from the group.
+    unimplemented!()
+}
 
 //
 // Encrypt a message.
@@ -320,10 +333,6 @@ pub fn mls_get_members(gid: GroupId) -> Result<(Vec<Identity>, Vec<KeyPackage>),
 
 pub struct PublicGroupState {}
 
-pub fn mls_get_group_states(gid: GroupId) -> Result<PublicGroupState, MlsError> {
-    unimplemented!()
-}
-
 ///
 /// Export a group secret.
 ///
@@ -347,4 +356,8 @@ pub fn mls_import_group_state(
 ) -> Result<(), MlsError> {
     unimplemented!()
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L605
+}
+
+pub fn mls_export_group_state(gid: GroupId) -> Result<PublicGroupState, MlsError> {
+    unimplemented!()
 }
