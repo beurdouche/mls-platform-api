@@ -30,11 +30,11 @@ const CIPHERSUITE: mls_platform_api::CipherSuite = mls_platform_api::CipherSuite
 
 fn main() -> Result<(), MlsError> {
     // Create signature keypair for Alice
-    let sig_keypair_alice = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE);
+    let sig_keypair_alice = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE, None);
     dbg!(&sig_keypair_alice);
 
     // Create signature keypair for Bob
-    let sig_keypair_bob = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE);
+    let sig_keypair_bob = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE, None);
     dbg!(&sig_keypair_bob);
 
     // // Create clients for Alice and Bob

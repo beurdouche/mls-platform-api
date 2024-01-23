@@ -53,11 +53,15 @@ pub struct SignatureKeypair {
     public: SignaturePublicKey,
 }
 // add rng: Option<[u8; 32]>
-pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypair, MlsError> {
+pub fn mls_generate_signature_keypair(
+    cs: CipherSuite,
+    randomness: Option<Vec<u8>>,
+) -> Result<SignatureKeypair, MlsError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
     // Generate a signature key pair.
+    //
     let (secret, public) = cipher_suite.signature_key_generate().unwrap();
 
     Ok(SignatureKeypair { secret, public })
@@ -259,11 +263,14 @@ pub fn mls_create_group(
         .create_group_with_id(gid.clone(), gce)
         .expect("Failed to create group");
 
-    // The state needs to be returned or stored somewhere
     group.commit(Vec::new()).unwrap();
     group.apply_pending_commit().unwrap();
 
-    Ok(gid)
+    // The state needs to be returned or stored somewhere
+    // group.write_to_storage().unwrap();
+    let state_tree = group.export_tree().unwrap();
+
+    Ok((gid, state_tree))
 
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/group/mod.rs#L276
