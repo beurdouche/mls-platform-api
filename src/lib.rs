@@ -1,3 +1,6 @@
+use std::option;
+
+use mls_rs::identity::SigningIdentity;
 use mls_rs::{CipherSuiteProvider, CryptoProvider};
 
 // Definition of the type for the CipherSuite
@@ -50,7 +53,7 @@ pub struct SignatureKeypair {
     secret: SignatureSecretKey,
     public: SignaturePublicKey,
 }
-
+// add rng: Option<[u8; 32]>
 pub fn mls_generate_signature_keypair(cs: CipherSuite) -> Result<SignatureKeypair, MlsError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
@@ -84,6 +87,9 @@ pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
 /// - `Err(MLSError)`: An error occurred during the generation process.
 ///
 
+// TODO: Look into capabilities that might be missing here...
+
+// Add rng: Option<[u8; 32]>
 pub async fn generate_key_package(
     group_config: GroupConfig,
     signature_keypair: SignatureKeypair,
@@ -97,9 +103,22 @@ pub async fn generate_key_package(
 ///
 /// We could internalize the KeyPackage validation in the Group operations.
 
+// TODO: Might need to pass the GroupConfig here as well.
 pub fn validate_key_package(key_package: KeyPackage) -> Result<(), MlsError> {
     unimplemented!()
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/external_client.rs#L104
+}
+
+///
+/// Extract Signing Identity from a KeyPackage.
+///
+
+// TODO: Discuss if it shouldn't return a SignaturePublicKey instead.
+
+pub fn signing_identity_from_key_package(
+    key_package: KeyPackage,
+) -> Result<SignaturePublicKey, MlsError> {
+    unimplemented!()
 }
 
 /// Group configuration.
@@ -157,12 +176,23 @@ pub struct ClientConfig {
     // Add fields as needed
 }
 
+// Question: should clients have consistent values for ratchet_tree_exrtensions
 pub fn mls_create_client_config(
     max_past_epoch: Option<u32>,
     use_ratchet_tree_extension: bool,
     out_of_order_tolerance: Option<u32>,
     maximum_forward_distance: Option<u32>,
 ) -> Result<ClientConfig, MlsError> {
+    unimplemented!()
+}
+
+///
+/// Get group members.
+///
+pub struct Identity {} // "google.com@groupId@clientId" <-> SigningIdentity
+pub struct Epoch {} // u32
+
+pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIdentity>), MlsError> {
     unimplemented!()
 }
 
@@ -203,7 +233,7 @@ pub type MlsMessage = Vec<u8>;
 pub fn mls_add_user(
     gid: GroupId,
     user: KeyPackage,
-    myIdentity: KeyPackage,
+    myIdentity: SigningIdentity,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
@@ -211,7 +241,7 @@ pub fn mls_add_user(
 pub fn mls_propose_add_user(
     gid: GroupId,
     user: KeyPackage,
-    myIdentity: KeyPackage,
+    myIdentity: SigningIdentity,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
@@ -220,11 +250,22 @@ pub fn mls_propose_add_user(
 /// Group management: Removing a user.
 ///
 
-pub fn mls_rem_user(gid: GroupId, user: KeyPackage) -> Result<MlsMessage, MlsError> {
+// We can't really use the KeyPackage to remove a user.
+// We need to use the identity of the user to remove them.
+
+pub fn mls_rem_user(
+    gid: GroupId,
+    user: Identity,
+    myIdentity: SigningIdentity,
+) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
 
-pub fn mls_propose_rem_user(gid: GroupId, user: KeyPackage) -> Result<MlsMessage, MlsError> {
+pub fn mls_propose_rem_user(
+    gid: GroupId,
+    user: Identity,
+    myIdentity: SigningIdentity,
+) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
 
@@ -236,7 +277,7 @@ pub fn mls_propose_rem_user(gid: GroupId, user: KeyPackage) -> Result<MlsMessage
 
 /// Should we rename that commit ?
 /// Possibly add a random nonce as an optional parameter.
-pub fn mls_update(gid: GroupId) -> Result<MlsMessage, MlsError> {
+pub fn mls_update(gid: GroupId, rng: Option<[u8; 32]>) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
     unimplemented!()
 }
@@ -292,6 +333,15 @@ pub fn mls_send_custom_proposal(
     unimplemented!()
 }
 
+pub struct GroupContextExtensionType; //u16
+
+pub fn mls_send_custom_groupcontextextension(
+    gce_type: GroupContextExtensionType,
+    data: Vec<u8>,
+) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
+
 // To leave the group
 pub fn mls_leave(gid: GroupId, my_key_package: KeyPackage) -> Result<(), MlsError> {
     // Leave and zero out all the states: RemoveProposal
@@ -314,15 +364,6 @@ pub fn mls_encrypt_message(
     message: String,
 ) -> Result<MlsMessage, MlsError> {
     // Internally the GroupState is updated.
-    unimplemented!()
-}
-
-///
-/// Get group members.
-///
-pub struct Identity {}
-
-pub fn mls_get_members(gid: GroupId) -> Result<(Vec<Identity>, Vec<KeyPackage>), MlsError> {
     unimplemented!()
 }
 
