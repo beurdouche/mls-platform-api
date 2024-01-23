@@ -1,8 +1,6 @@
-use std::option;
-
 use mls_rs::identity::SigningIdentity;
-use mls_rs::storage_provider::GroupState;
-use mls_rs::{group, CipherSuiteProvider, CryptoProvider, ExtensionList};
+// use mls_rs::storage_provider::GroupState;
+use mls_rs::{CipherSuiteProvider, CryptoProvider, ExtensionList};
 
 // Definition of the type for the CipherSuite
 pub use mls_rs::CipherSuite;
@@ -205,6 +203,7 @@ pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIde
 /// Note: this function underneath will write down the GroupState in its persistent storage.
 /// https://github.com/awslabs/mls-rs/blob/main/mls-rs-provider-sqlite/src/connection_strategy.rs
 pub type GroupId = Vec<u8>;
+pub type GroupState = Vec<u8>;
 
 pub fn generate_group_id() -> Vec<u8> {
     unimplemented!()
@@ -216,7 +215,7 @@ pub fn mls_create_group(
     myself: SigningIdentity,
     myself_sigkey: SignatureSecretKey,
     // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
-) -> Result<GroupId, MlsError> {
+) -> Result<(GroupId, GroupState), MlsError> {
     // Set the cryptography provider
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
 
@@ -259,6 +258,7 @@ pub fn mls_create_group(
         .create_group_with_id(gid.clone(), gce)
         .expect("Failed to create group");
 
+    // The state needs to be returned or stored somewhere
     group.commit(Vec::new()).unwrap();
     group.apply_pending_commit().unwrap();
 
