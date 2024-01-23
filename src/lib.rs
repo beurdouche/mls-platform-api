@@ -1,6 +1,6 @@
 use mls_rs::identity::SigningIdentity;
 // use mls_rs::storage_provider::GroupState;
-use mls_rs::{CipherSuiteProvider, CryptoProvider, ExtensionList};
+use mls_rs::{group, CipherSuiteProvider, CryptoProvider, ExtensionList};
 
 // Definition of the type for the CipherSuite
 pub use mls_rs::CipherSuite;
@@ -212,7 +212,6 @@ pub type GroupState = Vec<u8>;
 
 // TODO: Secure erasure
 pub fn generate_group_id(n: usize) -> Vec<u8> {
-    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let mut r: Vec<u8> = vec![0; n]; // Assuming you want a 16-byte ID, adjust the size as needed
     mls_rs_crypto_openssl::openssl::rand::rand_bytes(&mut r).unwrap();
     r
@@ -298,7 +297,7 @@ pub type MlsMessage = Vec<u8>;
 pub fn mls_add_user(
     gid: GroupId,
     user: KeyPackage,
-    myIdentity: SigningIdentity,
+    myself: SigningIdentity,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
