@@ -210,8 +210,12 @@ pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIde
 pub type GroupId = Vec<u8>;
 pub type GroupState = Vec<u8>;
 
-pub fn generate_group_id() -> Vec<u8> {
-    unimplemented!()
+// TODO: Secure erasure
+pub fn generate_group_id(n: usize) -> Vec<u8> {
+    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+    let mut r: Vec<u8> = vec![0; n]; // Assuming you want a 16-byte ID, adjust the size as needed
+    mls_rs_crypto_openssl::openssl::rand::rand_bytes(&mut r).unwrap();
+    r
 }
 
 pub fn mls_create_group(
@@ -249,7 +253,7 @@ pub fn mls_create_group(
     // Generate a GroupId if none is provided
     let gid = match gid {
         Some(gid) => gid,
-        None => generate_group_id(),
+        None => generate_group_id(32),
     };
 
     // Create a group context extension if none is provided
@@ -268,9 +272,10 @@ pub fn mls_create_group(
 
     // The state needs to be returned or stored somewhere
     // group.write_to_storage().unwrap();
-    let state_tree = group.export_tree().unwrap();
+    let group_state_tree = group.export_tree().unwrap();
 
-    Ok((gid, state_tree))
+    // Return
+    Ok((gid, group_state_tree))
 
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/group/mod.rs#L276
