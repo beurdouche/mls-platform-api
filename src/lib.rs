@@ -92,6 +92,7 @@ pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
 pub async fn generate_key_package(
     group_config: GroupConfig,
     signature_keypair: SignatureKeypair,
+    randomness: Option<Vec<u8>>,
 ) -> Result<KeyPackage, MlsError> {
     unimplemented!()
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L430
