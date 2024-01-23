@@ -1,7 +1,8 @@
 use std::option;
 
 use mls_rs::identity::SigningIdentity;
-use mls_rs::{CipherSuiteProvider, CryptoProvider};
+use mls_rs::storage_provider::GroupState;
+use mls_rs::{group, CipherSuiteProvider, CryptoProvider, ExtensionList};
 
 // Definition of the type for the CipherSuite
 pub use mls_rs::CipherSuite;
@@ -23,7 +24,7 @@ pub struct GroupContextExtensions {
 pub struct GroupConfig {
     ciphersuite: CipherSuite,
     version: Version,
-    options: Vec<GroupContextExtensions>,
+    options: ExtensionList,
 }
 
 #[derive(Debug)]
@@ -138,7 +139,7 @@ pub fn signing_identity_from_key_package(
 pub fn mls_create_group_config(
     cs: CipherSuite,
     v: Version,
-    options: Vec<GroupContextExtensions>,
+    options: ExtensionList,
 ) -> Result<GroupConfig, MlsError> {
     Ok(GroupConfig {
         ciphersuite: cs,
@@ -205,13 +206,64 @@ pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIde
 /// https://github.com/awslabs/mls-rs/blob/main/mls-rs-provider-sqlite/src/connection_strategy.rs
 pub type GroupId = Vec<u8>;
 
+pub fn generate_group_id() -> Vec<u8> {
+    unimplemented!()
+}
+
 pub fn mls_create_group(
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
-    self_: KeyPackage, // SigningIdentity (The signing key will be fetched internally)
-                       // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
+    myself: SigningIdentity,
+    myself_sigkey: SignatureSecretKey,
+    // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
 ) -> Result<GroupId, MlsError> {
-    unimplemented!()
+    // Set the cryptography provider
+    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+
+    // // Load the Signature Secret Key
+    // let secret_key = mls_rs_crypto_openssl::x509::signature_secret_key_from_bytes(include_bytes!(
+    //     "./test_data/x509/leaf/key.pem"
+    // ))
+    // .unwrap();
+
+    // Retrieve the ciphersuite from the Group Config
+    let group_config = group_config.unwrap();
+    let cs = Ok(group_config.ciphersuite)?;
+
+    // Build the client
+    let client = mls_rs::Client::builder()
+        .crypto_provider(crypto_provider)
+        .identity_provider(
+            mls_rs_crypto_openssl::x509::identity_provider_from_certificate(include_bytes!(
+                "./test_data/x509/root_ca/cert.der"
+            ))
+            .unwrap(),
+        )
+        .signing_identity(myself, myself_sigkey, cs)
+        .build();
+
+    // Generate a GroupId if none is provided
+    let gid = match gid {
+        Some(gid) => gid,
+        None => generate_group_id(),
+    };
+
+    // Create a group context extension if none is provided
+    let gce = match Some(group_config.options) {
+        Some(gce) => gce,
+        None => ExtensionList::new(),
+    };
+
+    // Create the group
+    let mut group = client
+        .create_group_with_id(gid.clone(), gce)
+        .expect("Failed to create group");
+
+    group.commit(Vec::new()).unwrap();
+    group.apply_pending_commit().unwrap();
+
+    Ok(gid)
+
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/group/mod.rs#L276
 }
