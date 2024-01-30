@@ -8,7 +8,10 @@ use mls_rs::{
     Client, CryptoProvider, ExtensionList,
 };
 
-const CIPHERSUITE: mls_platform_api::CipherSuite = mls_platform_api::CipherSuite::CURVE25519_AES128;
+const CIPHERSUITE: mls_platform_api::CipherSuite =
+    // MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
+    mls_platform_api::CipherSuite::CURVE25519_AES128;
+
 const VERSION: mls_rs::ProtocolVersion = mls_rs::ProtocolVersion::MLS_10;
 
 // fn make_client(name: &str) -> Result<Client<impl MlsConfig>, MlsError> {
@@ -30,11 +33,11 @@ const VERSION: mls_rs::ProtocolVersion = mls_rs::ProtocolVersion::MLS_10;
 // }
 
 fn main() -> Result<(), MlsError> {
-    let mut alice_state = mls_platform_api::generate_state(3);
+    let mut state_alice = mls_platform_api::create_state();
 
     // Create signature keypair for Alice
     let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut alice_state,
+        &mut state_alice,
         "alice",
         CIPHERSUITE,
         None,
@@ -54,7 +57,7 @@ fn main() -> Result<(), MlsError> {
             .unwrap();
 
     let gid = mls_platform_api::mls_create_group(
-        &mut alice_state,
+        &mut state_alice,
         Some(group_config),
         None,
         alice_signing_id.clone(),
@@ -64,11 +67,11 @@ fn main() -> Result<(), MlsError> {
     dbg!("group created", hex::encode(&gid));
 
     let message =
-        mls_platform_api::mls_update(gid, &mut alice_state, alice_signing_id, None).unwrap();
+        mls_platform_api::mls_update(gid, &mut state_alice, alice_signing_id, None).unwrap();
 
     dbg!("updated");
 
-    let exported_state = alice_state.to_bytes().unwrap();
+    let exported_state = state_alice.to_bytes().unwrap();
     // // Create clients for Alice and Bob
     // let alice = make_client(crypto_provider.clone(), "alice")?;
     // let bob = make_client(crypto_provider.clone(), "bob")?;

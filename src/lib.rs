@@ -55,12 +55,13 @@ pub struct SignatureKeypair {
     pub secret: SignatureSecretKey,
     pub public: SignaturePublicKey,
 }
+
 // add rng: Option<[u8; 32]>
 pub fn mls_generate_signature_keypair(
     state: &mut State,
     name: &str,
     cs: CipherSuite,
-    randomness: Option<Vec<u8>>,
+    _randomness: Option<Vec<u8>>,
 ) -> Result<SigningIdentity, MlsError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
@@ -71,7 +72,7 @@ pub fn mls_generate_signature_keypair(
     let credential = generate_credential(name)?;
     let signing_identity = SigningIdentity::new(credential.into_credential(), public);
 
-    state.myself_sigkeys.insert(
+    state.sigkeys.insert(
         signing_identity.mls_encode_to_vec().unwrap(),
         SignatureData {
             cs: *cs,
@@ -93,8 +94,11 @@ pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
     Ok(credential)
 }
 
-pub fn generate_state(epoch_retention: usize) -> State {
-    State::new(3).unwrap()
+///
+/// Generate a State.
+///
+pub fn create_state() -> State {
+    State::new().unwrap()
 }
 
 /// Generate a KeyPackage.
@@ -116,12 +120,11 @@ pub fn generate_state(epoch_retention: usize) -> State {
 pub fn generate_key_package(
     state: &State,
     myself: SigningIdentity,
-    randomness: Option<Vec<u8>>,
+    _randomness: Option<Vec<u8>>,
     group_config: Option<GroupConfig>,
 ) -> Result<MlsMessage, MlsError> {
     let client = state.client(myself, group_config)?;
     let key_package = client.generate_key_package_message()?;
-
     Ok(key_package.to_bytes()?)
 }
 
