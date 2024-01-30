@@ -9,6 +9,7 @@ use mls_rs::{
 };
 
 const CIPHERSUITE: mls_platform_api::CipherSuite = mls_platform_api::CipherSuite::CURVE25519_AES128;
+const VERSION: mls_rs::ProtocolVersion = mls_rs::ProtocolVersion::MLS_10;
 
 // fn make_client(name: &str) -> Result<Client<impl MlsConfig>, MlsError> {
 //     let sig_keypair = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE);
@@ -29,14 +30,45 @@ const CIPHERSUITE: mls_platform_api::CipherSuite = mls_platform_api::CipherSuite
 // }
 
 fn main() -> Result<(), MlsError> {
+    let mut alice_state = mls_platform_api::generate_state(3);
+
     // Create signature keypair for Alice
-    let sig_keypair_alice = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE, None);
-    dbg!(&sig_keypair_alice);
+    let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
+        &mut alice_state,
+        "alice",
+        CIPHERSUITE,
+        None,
+    )
+    .unwrap();
+
+    dbg!(format!("{alice_signing_id:?}"));
 
     // Create signature keypair for Bob
-    let sig_keypair_bob = mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE, None);
-    dbg!(&sig_keypair_bob);
+    //let sig_keypair_bob =
+    //    mls_platform_api::mls_generate_signature_keypair(CIPHERSUITE, None).unwrap();
 
+    //dbg!(hex::encode(&sig_keypair_bob.public));
+
+    let group_config =
+        mls_platform_api::mls_create_group_config(CIPHERSUITE, VERSION, Default::default())
+            .unwrap();
+
+    let gid = mls_platform_api::mls_create_group(
+        &mut alice_state,
+        Some(group_config),
+        None,
+        alice_signing_id.clone(),
+    )
+    .unwrap();
+
+    dbg!("group created", hex::encode(&gid));
+
+    let message =
+        mls_platform_api::mls_update(gid, &mut alice_state, alice_signing_id, None).unwrap();
+
+    dbg!("updated");
+
+    let exported_state = alice_state.to_bytes().unwrap();
     // // Create clients for Alice and Bob
     // let alice = make_client(crypto_provider.clone(), "alice")?;
     // let bob = make_client(crypto_provider.clone(), "bob")?;

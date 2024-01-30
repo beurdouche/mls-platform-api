@@ -1,15 +1,12 @@
+mod state;
+
 use mls_rs::identity::SigningIdentity;
+use mls_rs::mls_rs_codec::MlsEncode;
 // use mls_rs::storage_provider::GroupState;
-use mls_rs::{group, CipherSuiteProvider, CryptoProvider, ExtensionList};
+use mls_rs::{group, CipherSuiteProvider, CryptoProvider, ExtensionList, ProtocolVersion};
 
 // Definition of the type for the CipherSuite
 pub use mls_rs::CipherSuite;
-
-// Definition of the protocol version
-#[derive(Debug)]
-pub enum Version {
-    MlsVersion10,
-}
 
 // Definition of the GroupContext Extensions
 #[derive(Debug)]
@@ -18,11 +15,11 @@ pub struct GroupContextExtensions {
 }
 
 // Assuming GroupConfig is a struct
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GroupConfig {
-    ciphersuite: CipherSuite,
-    version: Version,
-    options: ExtensionList,
+    pub ciphersuite: CipherSuite,
+    pub version: ProtocolVersion,
+    pub options: ExtensionList,
 }
 
 #[derive(Debug)]
@@ -33,6 +30,12 @@ pub struct KeyPackage {
 #[derive(Debug)]
 pub struct MlsError {
     error: mls_rs::error::MlsError,
+}
+
+impl From<mls_rs::error::MlsError> for MlsError {
+    fn from(error: mls_rs::error::MlsError) -> Self {
+        Self { error }
+    }
 }
 
 ///
@@ -49,32 +52,49 @@ use mls_rs::crypto::SignatureSecretKey;
 
 #[derive(Debug)]
 pub struct SignatureKeypair {
-    secret: SignatureSecretKey,
-    public: SignaturePublicKey,
+    pub secret: SignatureSecretKey,
+    pub public: SignaturePublicKey,
 }
 // add rng: Option<[u8; 32]>
 pub fn mls_generate_signature_keypair(
+    state: &mut State,
+    name: &str,
     cs: CipherSuite,
     randomness: Option<Vec<u8>>,
-) -> Result<SignatureKeypair, MlsError> {
+) -> Result<SigningIdentity, MlsError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
     // Generate a signature key pair.
     //
     let (secret, public) = cipher_suite.signature_key_generate().unwrap();
+    let credential = generate_credential(name)?;
+    let signing_identity = SigningIdentity::new(credential.into_credential(), public);
 
-    Ok(SignatureKeypair { secret, public })
+    state.myself_sigkeys.insert(
+        signing_identity.mls_encode_to_vec().unwrap(),
+        SignatureData {
+            cs: *cs,
+            secret_key: secret.to_vec(),
+        },
+    );
+
+    Ok(signing_identity)
 }
 
 ///
 /// Generate a credential.
 ///
 use mls_rs::identity::basic::BasicCredential;
+use state::{SignatureData, State};
 
 pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
     let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
     Ok(credential)
+}
+
+pub fn generate_state(epoch_retention: usize) -> State {
+    State::new(3).unwrap()
 }
 
 /// Generate a KeyPackage.
@@ -93,13 +113,16 @@ pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
 // TODO: Look into capabilities that might be missing here...
 
 // Add rng: Option<[u8; 32]>
-pub async fn generate_key_package(
-    group_config: GroupConfig,
-    signature_keypair: SignatureKeypair,
+pub fn generate_key_package(
+    state: &State,
+    myself: SigningIdentity,
     randomness: Option<Vec<u8>>,
-) -> Result<KeyPackage, MlsError> {
-    unimplemented!()
-    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L430
+    group_config: Option<GroupConfig>,
+) -> Result<MlsMessage, MlsError> {
+    let client = state.client(myself, group_config)?;
+    let key_package = client.generate_key_package_message()?;
+
+    Ok(key_package.to_bytes()?)
 }
 
 ///
@@ -141,7 +164,7 @@ pub fn signing_identity_from_key_package(
 
 pub fn mls_create_group_config(
     cs: CipherSuite,
-    v: Version,
+    v: ProtocolVersion,
     options: ExtensionList,
 ) -> Result<GroupConfig, MlsError> {
     Ok(GroupConfig {
@@ -218,14 +241,13 @@ pub fn generate_group_id(n: usize) -> Vec<u8> {
 }
 
 pub fn mls_create_group(
+    state: &mut State,
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
     myself: SigningIdentity,
-    myself_sigkey: SignatureSecretKey,
     // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
-) -> Result<(GroupId, GroupState), MlsError> {
+) -> Result<GroupId, MlsError> {
     // Set the cryptography provider
-    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
 
     // // Load the Signature Secret Key
     // let secret_key = mls_rs_crypto_openssl::x509::signature_secret_key_from_bytes(include_bytes!(
@@ -234,20 +256,12 @@ pub fn mls_create_group(
     // .unwrap();
 
     // Retrieve the ciphersuite from the Group Config
-    let group_config = group_config.unwrap();
-    let cs = Ok(group_config.ciphersuite)?;
+    //let group_config = group_config.unwrap();
+    //let cs = group_config.ciphersuite.into();
+    //let storage = State::new(3, &myself, &myself_sigkey, cs).unwrap();
 
     // Build the client
-    let client = mls_rs::Client::builder()
-        .crypto_provider(crypto_provider)
-        .identity_provider(
-            mls_rs_crypto_openssl::x509::identity_provider_from_certificate(include_bytes!(
-                "./test_data/x509/root_ca/cert.der"
-            ))
-            .unwrap(),
-        )
-        .signing_identity(myself, myself_sigkey, cs)
-        .build();
+    let client = state.client(myself, group_config.clone())?;
 
     // Generate a GroupId if none is provided
     let gid = match gid {
@@ -256,25 +270,25 @@ pub fn mls_create_group(
     };
 
     // Create a group context extension if none is provided
-    let gce = match Some(group_config.options) {
-        Some(gce) => gce,
+    let gce = match group_config {
+        Some(c) => c.options,
         None => ExtensionList::new(),
     };
 
     // Create the group
-    let mut group = client
-        .create_group_with_id(gid.clone(), gce)
-        .expect("Failed to create group");
+    let mut group = client.create_group_with_id(gid.clone(), gce)?;
 
-    group.commit(Vec::new()).unwrap();
-    group.apply_pending_commit().unwrap();
+    group.commit(Vec::new())?;
+    group.apply_pending_commit()?;
 
     // The state needs to be returned or stored somewhere
-    // group.write_to_storage().unwrap();
-    let group_state_tree = group.export_tree().unwrap();
+    group.write_to_storage()?;
+    let gid = group.group_id().to_vec();
+    //let state = storage.to_bytes().unwrap();
+    //let group_state_tree = group.export_tree().unwrap();
 
     // Return
-    Ok((gid, group_state_tree))
+    Ok(gid)
 
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/group/mod.rs#L276
@@ -341,9 +355,20 @@ pub fn mls_propose_rem_user(
 
 /// Should we rename that commit ?
 /// Possibly add a random nonce as an optional parameter.
-pub fn mls_update(gid: GroupId, rng: Option<[u8; 32]>) -> Result<MlsMessage, MlsError> {
+pub fn mls_update(
+    gid: GroupId,
+    state: &mut State,
+    myself: SigningIdentity,
+    rng: Option<[u8; 32]>,
+) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
-    unimplemented!()
+    let client = state.client(myself, None)?;
+    let mut group = client.load_group(&gid)?;
+    let commit = group.commit(vec![])?;
+
+    group.write_to_storage()?;
+
+    Ok(commit.commit_message.to_bytes()?)
 }
 
 ///

@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 mls-rs = "0.36.0"
 mls-rs-crypto-openssl = "0.7.0"
+hex = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["alloc", "derive", "rc"] }
+bincode = "1.3"
