@@ -3,30 +3,13 @@ mod state;
 use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::MlsEncode;
 // use mls_rs::storage_provider::GroupState;
-use mls_rs::{group, CipherSuiteProvider, CryptoProvider, ExtensionList, ProtocolVersion};
+use mls_rs::{
+    group, CipherSuiteProvider, CryptoProvider, ExtensionList, KeyPackageStorage, ProtocolVersion,
+};
 
-// Definition of the type for the CipherSuite
-pub use mls_rs::CipherSuite;
-
-// Definition of the GroupContext Extensions
-#[derive(Debug)]
-pub struct GroupContextExtensions {
-    // Add fields as needed
-}
-
-// Assuming GroupConfig is a struct
-#[derive(Debug, Clone)]
-pub struct GroupConfig {
-    pub ciphersuite: CipherSuite,
-    pub version: ProtocolVersion,
-    pub options: ExtensionList,
-}
-
-#[derive(Debug)]
-pub struct KeyPackage {
-    kp: mls_rs::KeyPackage,
-}
-
+///
+/// Errors
+///
 #[derive(Debug)]
 pub struct MlsError {
     error: mls_rs::error::MlsError,
@@ -39,116 +22,31 @@ impl From<mls_rs::error::MlsError> for MlsError {
 }
 
 ///
-/// Generate Signature Key Pair
-///
-/// - Option: default to Basic Credentials
-/// - Possibly use strings as the credential types have names
-/// - (Alternatively we could use integers)
-///
-/// If we were to use enums we couldn't extend the support to
-/// new opaque types in between changes to the SDK.
-use mls_rs::crypto::SignaturePublicKey;
-use mls_rs::crypto::SignatureSecretKey;
-
-#[derive(Debug)]
-pub struct SignatureKeypair {
-    pub secret: SignatureSecretKey,
-    pub public: SignaturePublicKey,
-}
-
-// add rng: Option<[u8; 32]>
-pub fn mls_generate_signature_keypair(
-    state: &mut State,
-    name: &str,
-    cs: CipherSuite,
-    _randomness: Option<Vec<u8>>,
-) -> Result<SigningIdentity, MlsError> {
-    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
-    let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
-
-    // Generate a signature key pair.
-    //
-    let (secret, public) = cipher_suite.signature_key_generate().unwrap();
-    let credential = generate_credential(name)?;
-    let signing_identity = SigningIdentity::new(credential.into_credential(), public);
-
-    state.sigkeys.insert(
-        signing_identity.mls_encode_to_vec().unwrap(),
-        SignatureData {
-            cs: *cs,
-            secret_key: secret.to_vec(),
-        },
-    );
-
-    Ok(signing_identity)
-}
-
-///
-/// Generate a credential.
-///
-use mls_rs::identity::basic::BasicCredential;
-use state::{SignatureData, State};
-
-pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
-    let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
-    Ok(credential)
-}
-
-///
 /// Generate a State.
 ///
 pub fn create_state() -> State {
     State::new().unwrap()
 }
 
-/// Generate a KeyPackage.
-///
-/// This function generates a KeyPackage based on the provided GroupConfig and SignatureKey.
-///
-/// # Arguments
-/// - `group_config`: The configuration of the group.
-/// - `signature_key`: The signature key used for the KeyPackage.
-///
-/// # Returns
-/// - `Ok(KeyPackage)`: The generated KeyPackage.
-/// - `Err(MLSError)`: An error occurred during the generation process.
-///
-
-// TODO: Look into capabilities that might be missing here...
-
-// Add rng: Option<[u8; 32]>
-pub fn generate_key_package(
-    state: &State,
-    myself: SigningIdentity,
-    _randomness: Option<Vec<u8>>,
-    group_config: Option<GroupConfig>,
-) -> Result<MlsMessage, MlsError> {
-    let client = state.client(myself, group_config)?;
-    let key_package = client.generate_key_package_message()?;
-    Ok(key_package.to_bytes()?)
+// Definition of the GroupContext Extensions
+#[derive(Debug)]
+pub struct GroupContextExtensions {
+    // Add fields as needed
 }
 
-///
-/// Validate a KeyPackage.
-///
-/// We could internalize the KeyPackage validation in the Group operations.
-
-// TODO: Might need to pass the GroupConfig here as well.
-pub fn validate_key_package(key_package: KeyPackage) -> Result<(), MlsError> {
-    unimplemented!()
-    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/external_client.rs#L104
-}
+// Definition of the type for the CipherSuite
+pub use mls_rs::CipherSuite;
 
 ///
-/// Extract Signing Identity from a KeyPackage.
+/// Group Configuration
 ///
 
-// TODO: Discuss if it shouldn't return a SignaturePublicKey instead.
-
-pub fn signing_identity_from_key_package(
-    key_package: KeyPackage,
-) -> Result<SignaturePublicKey, MlsError> {
-    unimplemented!()
+// Assuming GroupConfig is a struct
+#[derive(Debug, Clone)]
+pub struct GroupConfig {
+    pub ciphersuite: CipherSuite,
+    pub version: ProtocolVersion,
+    pub options: ExtensionList,
 }
 
 /// Group configuration.
@@ -214,6 +112,167 @@ pub fn mls_create_client_config(
     maximum_forward_distance: Option<u32>,
 ) -> Result<ClientConfig, MlsError> {
     unimplemented!()
+}
+
+///
+/// Generate Signature Key Pair
+///
+use mls_rs::crypto::SignaturePublicKey;
+use mls_rs::crypto::SignatureSecretKey;
+
+#[derive(Debug)]
+pub struct SignatureKeypair {
+    pub secret: SignatureSecretKey,
+    pub public: SignaturePublicKey,
+}
+
+// Stateless function
+fn mls_stateless_generate_signature_keypair(
+    name: &str,
+    cs: CipherSuite,
+    _randomness: Option<Vec<u8>>,
+) -> Result<(SigningIdentity, SignatureSecretKey), MlsError> {
+    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+    let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
+
+    // Generate a signature key pair.
+    let (secret, public) = cipher_suite.signature_key_generate().unwrap();
+
+    // Create the credential and the signing identity.
+    // TODO: Handle X.509 certificates
+    let credential = generate_credential(name)?;
+    let signing_identity: SigningIdentity =
+        SigningIdentity::new(credential.into_credential(), public);
+
+    Ok((signing_identity, secret))
+}
+
+// Stateful function
+pub fn mls_generate_signature_keypair(
+    state: &mut State,
+    name: &str,
+    cs: CipherSuite,
+    _randomness: Option<Vec<u8>>,
+) -> Result<SigningIdentity, MlsError> {
+    // Generate the signature key pair and the siging identity.
+    let (signing_identity, signing_key) =
+        mls_stateless_generate_signature_keypair(name, cs, _randomness)?;
+
+    // Store the signature key pair.
+    state.sigkeys.insert(
+        signing_identity.mls_encode_to_vec().unwrap(),
+        SignatureData {
+            cs: *cs,
+            secret_key: signing_key.to_vec(),
+        },
+    );
+    Ok(signing_identity)
+}
+
+///
+/// Generate a credential.
+///
+use mls_rs::identity::basic::BasicCredential;
+use sha2::digest::crypto_common::Key;
+use sha2::{Digest, Sha256};
+use state::{KeyPackageData2, SignatureData, State};
+
+pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
+    let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
+    Ok(credential)
+}
+
+/// Generate a KeyPackage.
+///
+/// This function generates a KeyPackage based on the provided GroupConfig and SignatureKey.
+///
+/// # Arguments
+/// - `group_config`: The configuration of the group.
+/// - `signature_key`: The signature key used for the KeyPackage.
+///
+/// # Returns
+/// - `Ok(KeyPackage)`: The generated KeyPackage.
+/// - `Err(MLSError)`: An error occurred during the generation process.
+///
+
+// TODO: Look into capabilities that might be missing here...
+
+#[derive(Debug)]
+pub struct KeyPackage {
+    kp: mls_rs::KeyPackage,
+}
+
+fn mls_stateless_generate_key_package(
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
+    myself_sigkey: SignatureSecretKey,
+    _randomness: Option<Vec<u8>>,
+) -> Result<MlsMessage, MlsError> {
+    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+
+    // Match the ciphersuite
+    // TODO: replace this by creating a default GroupConfig value
+    let cs = match group_config {
+        Some(c) => c.ciphersuite,
+        None => {
+            //MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
+            CipherSuite::CURVE25519_AES128
+        }
+    };
+    let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
+
+    // Build the client
+    let client = mls_rs::Client::builder()
+        .crypto_provider(crypto_provider)
+        .identity_provider(
+            mls_rs_crypto_openssl::x509::identity_provider_from_certificate(include_bytes!(
+                "./test_data/x509/root_ca/cert.der"
+            ))
+            .unwrap(),
+        )
+        .signing_identity(myself, myself_sigkey, cs)
+        .build();
+
+    // Generate a KeyPackage
+    let key_package = client.generate_key_package_message()?;
+    Ok(key_package.to_bytes()?)
+}
+
+// Add rng: Option<[u8; 32]>
+pub fn generate_key_package(
+    state: &State,
+    myself: SigningIdentity,
+    group_config: Option<GroupConfig>,
+    _randomness: Option<Vec<u8>>,
+) -> Result<MlsMessage, MlsError> {
+    // Create an artificial copy of the state
+    let state_clone = state.clone();
+
+    // Create a client for that artificial state
+    let client = state_clone.client(myself, group_config.clone())?;
+
+    // Generate a KeyPackage from that Client
+    let key_package = client.generate_key_package_message()?;
+    let key_package_bytes = key_package.to_bytes()?;
+
+    // Calculate the SHA256 hash of the key package
+    let mut hasher = Sha256::new();
+    hasher.update(&key_package_bytes);
+    let id = hasher.finalize();
+
+    let kp = KeyPackage {
+        kp: Ok::<std::option::Option<mls_rs::KeyPackage>, MlsError>(
+            key_package.into_key_package(),
+        )?
+        .expect("KeyPackage"),
+    };
+
+    let kp_data = unimplemented!();
+
+    // Insert the Key Package in the * real * state
+    state.insert(id.to_vec(), kp_data);
+
+    Ok(key_package.to_bytes()?)
 }
 
 ///
@@ -494,3 +553,27 @@ pub fn mls_import_group_state(
 pub fn mls_export_group_state(gid: GroupId) -> Result<PublicGroupState, MlsError> {
     unimplemented!()
 }
+
+// ///
+// /// Validate a KeyPackage.
+// ///
+//
+// We could internalize the KeyPackage validation in the Group operations.
+//
+// TODO: Might need to pass the GroupConfig here as well.
+// pub fn validate_key_package(key_package: KeyPackage) -> Result<(), MlsError> {
+//     unimplemented!()
+//     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/external_client.rs#L104
+// }
+
+// ///
+// /// Extract Signing Identity from a KeyPackage.
+// ///
+
+// // TODO: Discuss if it shouldn't return a SignaturePublicKey instead.
+
+// pub fn signing_identity_from_key_package(
+//     key_package: KeyPackage,
+// ) -> Result<SignaturePublicKey, MlsError> {
+//     unimplemented!()
+// }

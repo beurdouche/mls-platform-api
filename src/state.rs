@@ -9,7 +9,7 @@ use mls_rs::{
     identity::SigningIdentity,
     mls_rs_codec::{MlsDecode, MlsEncode},
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
-    CipherSuite, Client, GroupStateStorage, KeyPackageStorage,
+    CipherSuite, Client, GroupStateStorage, KeyPackageStorage, MlsMessage,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -62,7 +62,8 @@ pub struct State {
     pub groups: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
     /// signing identity => key data
     pub sigkeys: HashMap<Vec<u8>, SignatureData>,
-    pub key_packages: HashMap<Vec<u8>, KeyPackageData2>,
+    // pub key_packages: Arc<Mutex<HashMap<Vec<u8>, MlsMessage>>>,
+    pub key_packages: Arc<Mutex<HashMap<Vec<u8>, KeyPackageData2>>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -210,20 +211,24 @@ impl KeyPackageStorage for State {
         let pkg2 = KeyPackageData2 {
             key_package_data: pkg,
         };
-        self.key_packages.insert(id, pkg2);
+
+        let mut states = self.key_packages.lock().unwrap();
+        states.insert(id, pkg2);
         Ok(())
     }
 
     fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
+        let states = self.key_packages.lock().unwrap();
         // Retrieve KeyPackageData2 and convert it to KeyPackageData
-        match self.key_packages.get(id) {
+        match states.get(id) {
             Some(pkg2) => Ok(Some(pkg2.key_package_data.clone())),
             None => Ok(None),
         }
     }
 
     fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
-        self.key_packages.remove(id);
+        let mut states = self.key_packages.lock().unwrap();
+        states.remove(id);
         Ok(())
     }
 }
