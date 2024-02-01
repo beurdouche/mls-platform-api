@@ -428,8 +428,6 @@ dependencies = [
 [[package]]
 name = "mls-rs"
 version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28e0850b29c349534e02d31985a8580ce0eaeb98a3d8eda34758cfd408f700b1"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -455,8 +453,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35855223b5af2d2d6f987d418f1b658d518c79a73a95664ec9357dd318f64562"
 dependencies = [
  "mls-rs-codec-derive",
  "thiserror",
@@ -466,8 +462,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec-derive"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f3fbf25b68713ec768c250f2b450c93ed997a5d2127b255d547ea7c6b21872b"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -478,8 +472,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-core"
 version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3dbc19d1231baaa0aec3e20fbe968812d2e5acc9f6b17febf84840986031840"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -493,8 +485,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-hpke"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab6d0860c0293886dba6dddbaab425d84cc9434e2bb8d122d73622845c7aea44"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -508,8 +498,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-openssl"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "045aa125c8760528dbd24817018c565c28f2800b02a30b23a257c741b215c416"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -525,8 +513,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-traits"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4096ca422ae6996ecb52e7f47242a0dea8f6ec2888ce76760cb080153aeb5add"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -536,8 +522,6 @@ dependencies = [
 [[package]]
 name = "mls-rs-identity-x509"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43fb6320bff860ed959e1184f598a0e981232e32c386f2c28d82e5b947f026ce"
 dependencies = [
  "async-trait",
  "maybe-async",
