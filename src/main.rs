@@ -1,3 +1,4 @@
+use mls_platform_api::MlsMessageOrAck;
 use mls_rs::error::MlsError;
 
 const CIPHERSUITE: mls_platform_api::CipherSuite =
@@ -10,9 +11,11 @@ fn main() -> Result<(), MlsError> {
     let group_config =
         mls_platform_api::mls_create_group_config(CIPHERSUITE, VERSION, Default::default())
             .unwrap();
-    let mut state_alice = mls_platform_api::create_state();
 
-    // Create signature keypair for Alice
+    let mut state_alice = mls_platform_api::create_state();
+    let mut state_bob = mls_platform_api::create_state();
+
+    // Create signature keypairs
     let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
         &mut state_alice,
         "alice",
@@ -21,21 +24,25 @@ fn main() -> Result<(), MlsError> {
     )
     .unwrap();
 
-    // Create key package for Alice
-    let _alice_kp = mls_platform_api::generate_key_package(
-        &state_alice,
-        alice_signing_id.clone(),
+    let bob_signing_id =
+        mls_platform_api::mls_generate_signature_keypair(&mut state_bob, "bob", CIPHERSUITE, None)
+            .unwrap();
+
+    // Create key package for Bob
+    let bob_kp = mls_platform_api::generate_key_package(
+        &state_bob,
+        bob_signing_id.clone(),
         Some(group_config.clone()),
         None,
     )
     .unwrap();
 
-    dbg!(format!("{alice_signing_id:?}"));
+    dbg!(format!("{bob_kp:?}"));
 
     // Create a group with Alice
     let gid = mls_platform_api::mls_create_group(
         &mut state_alice,
-        Some(group_config),
+        Some(group_config.clone()),
         None,
         alice_signing_id.clone(),
     )
@@ -43,10 +50,55 @@ fn main() -> Result<(), MlsError> {
 
     dbg!("group created", hex::encode(&gid));
 
-    let _message =
-        mls_platform_api::mls_update(gid, &mut state_alice, alice_signing_id, None).unwrap();
+    // Add bob
+    let (_commit, welcome) = mls_platform_api::mls_add_user(
+        &mut state_alice,
+        &gid,
+        Some(group_config.clone()),
+        vec![bob_kp],
+        alice_signing_id.clone(),
+    )
+    .unwrap();
 
-    dbg!("updated");
+    mls_platform_api::mls_process_received_message(
+        &state_alice,
+        &gid,
+        alice_signing_id.clone(),
+        MlsMessageOrAck::Ack,
+        Some(group_config.clone()),
+    )
+    .unwrap();
+
+    // Bob joins
+    mls_platform_api::mls_process_received_join_message(
+        &state_bob,
+        bob_signing_id.clone(),
+        Some(group_config.clone()),
+        welcome,
+        None,
+    )
+    .unwrap();
+
+    // Bob sends message to alice
+    let ciphertext = mls_platform_api::mls_encrypt_message(
+        &state_bob,
+        &gid,
+        bob_signing_id,
+        Some(group_config.clone()),
+        b"hello",
+    )
+    .unwrap();
+
+    let message = mls_platform_api::mls_process_received_message(
+        &state_alice,
+        &gid,
+        alice_signing_id,
+        MlsMessageOrAck::MlsMessage(ciphertext),
+        Some(group_config),
+    )
+    .unwrap();
+
+    dbg!(format!("{message:?}"));
 
     // Generate the exported state for Alice
     let _exported_state = state_alice.to_bytes().unwrap();

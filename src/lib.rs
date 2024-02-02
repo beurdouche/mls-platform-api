@@ -1,6 +1,6 @@
 mod state;
 
-use mls_rs::group::Roster;
+use mls_rs::group::{CommitMessageDescription, ExportedTree, ReceivedMessage, Roster};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::MlsEncode;
 use mls_rs::mls_rules::{CommitDirection, CommitSource, ProposalBundle};
@@ -232,13 +232,13 @@ pub fn generate_key_package(
     myself: SigningIdentity,
     group_config: Option<GroupConfig>,
     _randomness: Option<Vec<u8>>,
-) -> Result<MlsMessage, MlsError> {
+) -> Result<mls_rs::MlsMessage, MlsError> {
     // Create a client for that artificial state
     let client = state.client(myself, group_config.clone())?;
 
     // Generate a KeyPackage from that Client
     let key_package = client.generate_key_package_message()?;
-    Ok(key_package.to_bytes()?)
+    Ok(key_package)
 }
 
 ///
@@ -318,14 +318,14 @@ pub type MlsMessage = Vec<u8>;
 
 pub fn mls_add_user(
     pstate: &mut PlatformState,
-    gid: GroupId,
+    gid: &GroupId,
     group_config: Option<GroupConfig>,
     user: Vec<mls_rs::MlsMessage>,
     myself: SigningIdentity,
 ) -> Result<(mls_rs::MlsMessage, mls_rs::MlsMessage), MlsError> {
     // Get the group from the state
     let client = pstate.client(myself, group_config)?;
-    let mut group = client.load_group(&gid)?;
+    let mut group = client.load_group(gid)?;
 
     let mut commit = user
         .into_iter()
@@ -416,15 +416,23 @@ pub enum MlsMessageOrAck {
     MlsMessage(mls_rs::MlsMessage),
 }
 
-fn mls_process_received_message(
-    pstate: &mut PlatformState,
-    gid: GroupId,
+pub fn mls_process_received_message(
+    pstate: &PlatformState,
+    gid: &GroupId,
     myself: SigningIdentity,
     message_or_ack: MlsMessageOrAck,
-) -> Result<(String), MlsError> {
-    unimplemented!()
+    group_config: Option<GroupConfig>,
+) -> Result<ReceivedMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
 
-    // Internally the GroupState is updated.
+    let out = match message_or_ack {
+        MlsMessageOrAck::Ack => group.apply_pending_commit().map(ReceivedMessage::Commit),
+        MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message),
+    };
+
+    group.write_to_storage()?;
+
+    Ok(out?)
 }
 
 // https://docs.rs/mls-rs/latest/mls_rs/group/mls_rules/trait.MlsRules.html#tymethod.filter_proposals
@@ -438,13 +446,18 @@ fn mls_process_received_message(
 
 pub struct RatchetTree {}
 
-fn mls_process_received_join_message(
-    gid: GroupId,
-    message: MlsMessage,
-    ratchet_tree: Option<RatchetTree>,
+pub fn mls_process_received_join_message(
+    pstate: &PlatformState,
+    myself: SigningIdentity,
+    group_config: Option<GroupConfig>,
+    welcome: mls_rs::MlsMessage,
+    ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<(), MlsError> {
-    // Internally the GroupState is updated.
-    unimplemented!()
+    let client = pstate.client(myself, group_config)?;
+    let (mut group, info) = client.join_group(ratchet_tree, welcome)?;
+    group.write_to_storage()?;
+
+    Ok(())
 }
 
 pub struct ProposalType; //u16
@@ -482,12 +495,18 @@ fn mls_close(gid: GroupId) -> Result<bool, MlsError> {
 //
 
 pub fn mls_encrypt_message(
-    gid: GroupId,
-    my_key_package: KeyPackage,
-    message: String,
-) -> Result<MlsMessage, MlsError> {
-    // Internally the GroupState is updated.
-    unimplemented!()
+    pstate: &PlatformState,
+    gid: &GroupId,
+    myself: SigningIdentity,
+    group_config: Option<GroupConfig>,
+    message: &[u8],
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
+
+    let out = group.encrypt_application_message(message, vec![])?;
+    group.write_to_storage()?;
+
+    Ok(out)
 }
 
 ///
