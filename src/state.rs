@@ -58,7 +58,7 @@ impl<'de> Deserialize<'de> for KeyPackageData2 {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct State {
+pub struct PlatformState {
     pub groups: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
     /// signing identity => key data
     pub sigkeys: HashMap<Vec<u8>, SignatureData>,
@@ -73,7 +73,7 @@ pub(crate) struct SignatureData {
     pub secret_key: Vec<u8>,
 }
 
-impl State {
+impl PlatformState {
     pub fn new() -> Result<Self, mls_rs::mls_rs_codec::Error> {
         Ok(Self {
             groups: Default::default(),
@@ -122,7 +122,7 @@ impl State {
     }
 }
 
-impl GroupStateStorage for State {
+impl GroupStateStorage for PlatformState {
     type Error = mls_rs::mls_rs_codec::Error;
 
     fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
@@ -203,7 +203,7 @@ impl GroupStateStorage for State {
     }
 }
 
-impl KeyPackageStorage for State {
+impl KeyPackageStorage for PlatformState {
     type Error = mls_rs::mls_rs_codec::Error;
 
     fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {

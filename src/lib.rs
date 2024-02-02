@@ -4,7 +4,8 @@ use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::MlsEncode;
 // use mls_rs::storage_provider::GroupState;
 use mls_rs::{
-    group, CipherSuiteProvider, CryptoProvider, ExtensionList, KeyPackageStorage, ProtocolVersion,
+    group, CipherSuiteProvider, CryptoProvider, ExtensionList, GroupStateStorage,
+    KeyPackageStorage, ProtocolVersion,
 };
 
 ///
@@ -22,10 +23,10 @@ impl From<mls_rs::error::MlsError> for MlsError {
 }
 
 ///
-/// Generate a State.
+/// Generate a PlatformState.
 ///
-pub fn create_state() -> State {
-    State::new().unwrap()
+pub fn create_state() -> PlatformState {
+    PlatformState::new().unwrap()
 }
 
 // Definition of the GroupContext Extensions
@@ -149,7 +150,7 @@ fn mls_stateless_generate_signature_keypair(
 
 // Stateful function
 pub fn mls_generate_signature_keypair(
-    state: &mut State,
+    state: &mut PlatformState,
     name: &str,
     cs: CipherSuite,
     _randomness: Option<Vec<u8>>,
@@ -175,7 +176,7 @@ pub fn mls_generate_signature_keypair(
 use mls_rs::identity::basic::BasicCredential;
 use sha2::digest::crypto_common::Key;
 use sha2::{Digest, Sha256};
-use state::{KeyPackageData2, SignatureData, State};
+use state::{KeyPackageData2, PlatformState, SignatureData};
 
 pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
     let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
@@ -240,7 +241,7 @@ fn mls_stateless_generate_key_package(
 
 // Add rng: Option<[u8; 32]>
 pub fn generate_key_package(
-    state: &State,
+    state: &PlatformState,
     myself: SigningIdentity,
     group_config: Option<GroupConfig>,
     _randomness: Option<Vec<u8>>,
@@ -303,7 +304,7 @@ pub fn generate_group_id(n: usize) -> Vec<u8> {
 }
 
 pub fn mls_create_group(
-    state: &mut State,
+    pstate: &mut PlatformState,
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
     myself: SigningIdentity,
@@ -323,7 +324,7 @@ pub fn mls_create_group(
     //let storage = State::new(3, &myself, &myself_sigkey, cs).unwrap();
 
     // Build the client
-    let client = state.client(myself, group_config.clone())?;
+    let client = pstate.client(myself, group_config.clone())?;
 
     // Generate a GroupId if none is provided
     let gid = match gid {
@@ -371,10 +372,14 @@ pub fn mls_create_group(
 pub type MlsMessage = Vec<u8>;
 
 pub fn mls_add_user(
+    pstate: &mut PlatformState,
     gid: GroupId,
+    group_config: Option<GroupConfig>,
     user: KeyPackage,
     myself: SigningIdentity,
 ) -> Result<MlsMessage, MlsError> {
+    // Get the group from the state
+
     unimplemented!()
 }
 
@@ -419,12 +424,12 @@ pub fn mls_propose_rem_user(
 /// Possibly add a random nonce as an optional parameter.
 pub fn mls_update(
     gid: GroupId,
-    state: &mut State,
+    pstate: &mut PlatformState,
     myself: SigningIdentity,
     rng: Option<[u8; 32]>,
 ) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
-    let client = state.client(myself, None)?;
+    let client = pstate.client(myself, None)?;
     let mut group = client.load_group(&gid)?;
     let commit = group.commit(vec![])?;
 
