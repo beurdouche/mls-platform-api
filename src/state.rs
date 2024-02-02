@@ -9,14 +9,14 @@ use mls_rs::{
     identity::SigningIdentity,
     mls_rs_codec::{MlsDecode, MlsEncode},
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
-    CipherSuite, Client, GroupStateStorage, KeyPackageStorage, MlsMessage,
+    CipherSuite, Client, GroupStateStorage, KeyPackageStorage,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{GroupConfig, MlsError};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub(crate) struct GroupData {
+pub struct GroupData {
     state_data: Vec<u8>,
     epoch_data: HashMap<u64, Vec<u8>>,
 }
@@ -67,7 +67,7 @@ pub struct PlatformState {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub(crate) struct SignatureData {
+pub struct SignatureData {
     pub cs: u16,
     #[serde(with = "hex::serde")]
     pub secret_key: Vec<u8>,
@@ -106,6 +106,7 @@ impl PlatformState {
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
             .group_state_storage(self.clone())
+            .key_package_repo(self.clone())
             .signing_identity(
                 myself,
                 myself_sigkey.secret_key.clone().into(),
@@ -119,6 +120,21 @@ impl PlatformState {
         }
 
         Ok(builder.build())
+    }
+
+    pub fn insert_sigkey(
+        &mut self,
+        myself: &SigningIdentity,
+        myself_sigkey: &SignatureSecretKey,
+        cs: CipherSuite,
+    ) {
+        self.sigkeys.insert(
+            myself.mls_encode_to_vec().unwrap(),
+            SignatureData {
+                cs: *cs,
+                secret_key: myself_sigkey.to_vec(),
+            },
+        );
     }
 }
 

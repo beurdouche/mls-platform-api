@@ -1,11 +1,14 @@
 mod state;
 
+use mls_rs::group::Roster;
 use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::MlsEncode;
+use mls_rs::mls_rules::{CommitDirection, CommitSource, ProposalBundle};
+use mls_rs::storage_provider::KeyPackageData;
 // use mls_rs::storage_provider::GroupState;
 use mls_rs::{
     group, CipherSuiteProvider, CryptoProvider, ExtensionList, GroupStateStorage,
-    KeyPackageStorage, ProtocolVersion,
+    KeyPackageStorage, MlsRules, ProtocolVersion,
 };
 
 ///
@@ -156,24 +159,17 @@ pub fn mls_generate_signature_keypair(
     _randomness: Option<Vec<u8>>,
 ) -> Result<SigningIdentity, MlsError> {
     // Generate the signature key pair and the siging identity.
-    let (signing_identity, signing_key) =
-        mls_stateless_generate_signature_keypair(name, cs, _randomness)?;
+    let (myself, myself_sigkey) = mls_stateless_generate_signature_keypair(name, cs, _randomness)?;
 
     // Store the signature key pair.
-    state.sigkeys.insert(
-        signing_identity.mls_encode_to_vec().unwrap(),
-        SignatureData {
-            cs: *cs,
-            secret_key: signing_key.to_vec(),
-        },
-    );
-    Ok(signing_identity)
+    state.insert_sigkey(&myself, &myself_sigkey, cs);
+    Ok(myself)
 }
 
 ///
 /// Generate a credential.
 ///
-use mls_rs::identity::basic::BasicCredential;
+use mls_rs::identity::basic::{BasicCredential, BasicIdentityProvider};
 use sha2::digest::crypto_common::Key;
 use sha2::{Digest, Sha256};
 use state::{KeyPackageData2, PlatformState, SignatureData};
@@ -208,35 +204,26 @@ fn mls_stateless_generate_key_package(
     myself: SigningIdentity,
     myself_sigkey: SignatureSecretKey,
     _randomness: Option<Vec<u8>>,
-) -> Result<MlsMessage, MlsError> {
-    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+) -> Result<(MlsMessage, KeyPackageData), MlsError> {
+    let mut state = create_state();
 
-    // Match the ciphersuite
-    // TODO: replace this by creating a default GroupConfig value
-    let cs = match group_config {
-        Some(c) => c.ciphersuite,
-        None => {
-            //MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
-            CipherSuite::CURVE25519_AES128
-        }
-    };
-    let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
+    state.insert_sigkey(
+        &myself,
+        &myself_sigkey,
+        // TODO make default config if None
+        group_config.clone().unwrap().ciphersuite,
+    );
 
-    // Build the client
-    let client = mls_rs::Client::builder()
-        .crypto_provider(crypto_provider)
-        .identity_provider(
-            mls_rs_crypto_openssl::x509::identity_provider_from_certificate(include_bytes!(
-                "./test_data/x509/root_ca/cert.der"
-            ))
-            .unwrap(),
-        )
-        .signing_identity(myself, myself_sigkey, cs)
-        .build();
-
-    // Generate a KeyPackage
+    let client = state.client(myself, group_config)?;
     let key_package = client.generate_key_package_message()?;
-    Ok(key_package.to_bytes()?)
+    let key_package_bytes = key_package.to_bytes()?;
+
+    let mut state = state.key_packages.lock().unwrap();
+    let key = state.keys().next().unwrap().clone();
+
+    let key_package_data = state.remove(&key).unwrap();
+
+    Ok((key_package_bytes, key_package_data.key_package_data))
 }
 
 // Add rng: Option<[u8; 32]>
@@ -246,33 +233,11 @@ pub fn generate_key_package(
     group_config: Option<GroupConfig>,
     _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, MlsError> {
-    // Create an artificial copy of the state
-    let state_clone = state.clone();
-
     // Create a client for that artificial state
-    let client = state_clone.client(myself, group_config.clone())?;
+    let client = state.client(myself, group_config.clone())?;
 
     // Generate a KeyPackage from that Client
     let key_package = client.generate_key_package_message()?;
-    let key_package_bytes = key_package.to_bytes()?;
-
-    // Calculate the SHA256 hash of the key package
-    let mut hasher = Sha256::new();
-    hasher.update(&key_package_bytes);
-    let id = hasher.finalize();
-
-    let kp = KeyPackage {
-        kp: Ok::<std::option::Option<mls_rs::KeyPackage>, MlsError>(
-            key_package.into_key_package(),
-        )?
-        .expect("KeyPackage"),
-    };
-
-    let kp_data = unimplemented!();
-
-    // Insert the Key Package in the * real * state
-    state.insert(id.to_vec(), kp_data);
-
     Ok(key_package.to_bytes()?)
 }
 
@@ -310,27 +275,8 @@ pub fn mls_create_group(
     myself: SigningIdentity,
     // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
 ) -> Result<GroupId, MlsError> {
-    // Set the cryptography provider
-
-    // // Load the Signature Secret Key
-    // let secret_key = mls_rs_crypto_openssl::x509::signature_secret_key_from_bytes(include_bytes!(
-    //     "./test_data/x509/leaf/key.pem"
-    // ))
-    // .unwrap();
-
-    // Retrieve the ciphersuite from the Group Config
-    //let group_config = group_config.unwrap();
-    //let cs = group_config.ciphersuite.into();
-    //let storage = State::new(3, &myself, &myself_sigkey, cs).unwrap();
-
     // Build the client
     let client = pstate.client(myself, group_config.clone())?;
-
-    // Generate a GroupId if none is provided
-    let gid = match gid {
-        Some(gid) => gid,
-        None => generate_group_id(32),
-    };
 
     // Create a group context extension if none is provided
     let gce = match group_config {
@@ -338,23 +284,22 @@ pub fn mls_create_group(
         None => ExtensionList::new(),
     };
 
-    // Create the group
-    let mut group = client.create_group_with_id(gid.clone(), gce)?;
+    // Generate a GroupId if none is provided
+    let mut group = match gid {
+        Some(gid) => client.create_group_with_id(gid, gce)?,
+        None => client.create_group(gce)?,
+    };
 
+    // Create the group
     group.commit(Vec::new())?;
     group.apply_pending_commit()?;
 
     // The state needs to be returned or stored somewhere
     group.write_to_storage()?;
     let gid = group.group_id().to_vec();
-    //let state = storage.to_bytes().unwrap();
-    //let group_state_tree = group.export_tree().unwrap();
 
     // Return
     Ok(gid)
-
-    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L479
-    // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/group/mod.rs#L276
 }
 
 ///
@@ -375,21 +320,36 @@ pub fn mls_add_user(
     pstate: &mut PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
-    user: KeyPackage,
+    user: Vec<mls_rs::MlsMessage>,
     myself: SigningIdentity,
-) -> Result<MlsMessage, MlsError> {
+) -> Result<(mls_rs::MlsMessage, mls_rs::MlsMessage), MlsError> {
     // Get the group from the state
+    let client = pstate.client(myself, group_config)?;
+    let mut group = client.load_group(&gid)?;
 
-    unimplemented!()
+    let mut commit = user
+        .into_iter()
+        .try_fold(group.commit_builder(), |commit_builder, user| {
+            commit_builder.add_member(user)
+        })?
+        .build()?;
+
+    let welcome = commit.welcome_messages.remove(0);
+    let commit = commit.commit_message;
+
+    group.write_to_storage()?;
+
+    Ok((commit, welcome))
 }
 
-pub fn mls_propose_add_user(
-    gid: GroupId,
-    user: KeyPackage,
-    myIdentity: SigningIdentity,
-) -> Result<MlsMessage, MlsError> {
-    unimplemented!()
-}
+// TODO: Implement this !
+// pub fn mls_propose_add_user(
+//     gid: GroupId,
+//     user: KeyPackage,
+//     my_identity: SigningIdentity,
+// ) -> Result<MlsMessage, MlsError> {
+//     unimplemented!()
+// }
 
 ///
 /// Group management: Removing a user.
@@ -401,7 +361,7 @@ pub fn mls_propose_add_user(
 pub fn mls_rem_user(
     gid: GroupId,
     user: Identity,
-    myIdentity: SigningIdentity,
+    my_identity: SigningIdentity,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
@@ -409,7 +369,7 @@ pub fn mls_rem_user(
 pub fn mls_propose_rem_user(
     gid: GroupId,
     user: Identity,
-    myIdentity: SigningIdentity,
+    my_identity: SigningIdentity,
 ) -> Result<MlsMessage, MlsError> {
     unimplemented!()
 }
@@ -449,11 +409,18 @@ pub fn mls_update(
 ///  - A Proposal will result in a Commit.
 ///  - A Commit will result in it being applied to advance the group state.
 ///  - An application message will result in it being decrypted.
+///
+
+pub enum MlsMessageOrAck {
+    Ack,
+    MlsMessage(mls_rs::MlsMessage),
+}
 
 fn mls_process_received_message(
+    pstate: &mut PlatformState,
     gid: GroupId,
-    key_package: KeyPackage,
-    message: MlsMessage,
+    myself: SigningIdentity,
+    message_or_ack: MlsMessageOrAck,
 ) -> Result<(String), MlsError> {
     unimplemented!()
 
