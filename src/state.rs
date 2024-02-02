@@ -95,7 +95,7 @@ impl PlatformState {
         myself: SigningIdentity,
         group_config: Option<GroupConfig>,
     ) -> Result<Client<impl MlsConfig>, MlsError> {
-        let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
 
         let myself_sigkey = self
             .sigkeys

@@ -136,7 +136,7 @@ fn mls_stateless_generate_signature_keypair(
     cs: CipherSuite,
     _randomness: Option<Vec<u8>>,
 ) -> Result<(SigningIdentity, SignatureSecretKey), MlsError> {
-    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+    let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
     // Generate a signature key pair.
@@ -260,13 +260,6 @@ pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIde
 /// https://github.com/awslabs/mls-rs/blob/main/mls-rs-provider-sqlite/src/connection_strategy.rs
 pub type GroupId = Vec<u8>;
 pub type GroupState = Vec<u8>;
-
-// TODO: Secure erasure
-pub fn generate_group_id(n: usize) -> Vec<u8> {
-    let mut r: Vec<u8> = vec![0; n]; // Assuming you want a 16-byte ID, adjust the size as needed
-    mls_rs_crypto_openssl::openssl::rand::rand_bytes(&mut r).unwrap();
-    r
-}
 
 pub fn mls_create_group(
     pstate: &mut PlatformState,
