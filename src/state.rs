@@ -11,37 +11,74 @@ use mls_rs::{
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
     CipherSuite, Client, GroupStateStorage, KeyPackageStorage,
 };
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{GroupConfig, MlsError};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct State {
-    pub group_states: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
-    pub max_epoch_retention: usize,
-
-    /// signing identity => key data
-    pub myself_sigkeys: HashMap<Vec<u8>, SignatureData>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub(crate) struct GroupData {
+pub struct GroupData {
     state_data: Vec<u8>,
     epoch_data: HashMap<u64, Vec<u8>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct KeyPackageData2 {
+    pub key_package_data: KeyPackageData,
+}
+
+//
+// Hack as I can't figure out how to implement Serialize/Deserialize for KeyPackageData
+// TODO: Discuss with Marta
+//
+impl Serialize for KeyPackageData2 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize `KeyPackageData` using `MlsEncode` and then serialize the resulting byte array
+        let encoded = self
+            .key_package_data
+            .mls_encode_to_vec()
+            .map_err(serde::ser::Error::custom)?;
+        serializer.serialize_bytes(&encoded)
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyPackageData2 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize byte array and then use `MlsDecode` to get `KeyPackageData`
+        let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
+        let key_package_data =
+            KeyPackageData::mls_decode(&mut bytes.as_slice()).map_err(serde::de::Error::custom)?;
+        Ok(KeyPackageData2 { key_package_data })
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub(crate) struct SignatureData {
+pub struct PlatformState {
+    pub groups: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
+    /// signing identity => key data
+    pub sigkeys: HashMap<Vec<u8>, SignatureData>,
+    // pub key_packages: Arc<Mutex<HashMap<Vec<u8>, MlsMessage>>>,
+    pub key_packages: Arc<Mutex<HashMap<Vec<u8>, KeyPackageData2>>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct SignatureData {
     pub cs: u16,
     #[serde(with = "hex::serde")]
     pub secret_key: Vec<u8>,
 }
 
-impl State {
-    pub fn new(max_epoch_retention: usize) -> Result<Self, mls_rs::mls_rs_codec::Error> {
+impl PlatformState {
+    pub fn new() -> Result<Self, mls_rs::mls_rs_codec::Error> {
         Ok(Self {
-            max_epoch_retention,
-            group_states: Default::default(),
-            myself_sigkeys: Default::default(),
+            groups: Default::default(),
+            sigkeys: Default::default(),
+            key_packages: Default::default(),
         })
     }
 
@@ -61,7 +98,7 @@ impl State {
         let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
 
         let myself_sigkey = self
-            .myself_sigkeys
+            .sigkeys
             .get(&myself.mls_encode_to_vec().unwrap())
             .unwrap();
 
@@ -69,6 +106,7 @@ impl State {
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
             .group_state_storage(self.clone())
+            .key_package_repo(self.clone())
             .signing_identity(
                 myself,
                 myself_sigkey.secret_key.clone().into(),
@@ -83,14 +121,29 @@ impl State {
 
         Ok(builder.build())
     }
+
+    pub fn insert_sigkey(
+        &mut self,
+        myself: &SigningIdentity,
+        myself_sigkey: &SignatureSecretKey,
+        cs: CipherSuite,
+    ) {
+        self.sigkeys.insert(
+            myself.mls_encode_to_vec().unwrap(),
+            SignatureData {
+                cs: *cs,
+                secret_key: myself_sigkey.to_vec(),
+            },
+        );
+    }
 }
 
-impl GroupStateStorage for State {
+impl GroupStateStorage for PlatformState {
     type Error = mls_rs::mls_rs_codec::Error;
 
     fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
         Ok(self
-            .group_states
+            .groups
             .lock()
             .unwrap()
             .get(group_id)
@@ -101,7 +154,7 @@ impl GroupStateStorage for State {
     where
         T: GroupState + MlsDecode,
     {
-        self.group_states
+        self.groups
             .lock()
             .unwrap()
             .get(group_id)
@@ -114,7 +167,7 @@ impl GroupStateStorage for State {
     where
         T: EpochRecord + MlsEncode + MlsDecode,
     {
-        self.group_states
+        self.groups
             .lock()
             .unwrap()
             .get(group_id)
@@ -135,7 +188,7 @@ impl GroupStateStorage for State {
         ET: EpochRecord + MlsEncode + MlsDecode + Send + Sync,
     {
         let state_data = state.mls_encode_to_vec()?;
-        let mut states = self.group_states.lock().unwrap();
+        let mut states = self.groups.lock().unwrap();
 
         let group_data = match states.entry(state.id()) {
             Entry::Occupied(entry) => {
@@ -166,18 +219,32 @@ impl GroupStateStorage for State {
     }
 }
 
-impl KeyPackageStorage for State {
+impl KeyPackageStorage for PlatformState {
     type Error = mls_rs::mls_rs_codec::Error;
 
     fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
-        todo!()
+        // Convert KeyPackageData to KeyPackageData2
+        let pkg2 = KeyPackageData2 {
+            key_package_data: pkg,
+        };
+
+        let mut states = self.key_packages.lock().unwrap();
+        states.insert(id, pkg2);
+        Ok(())
     }
 
     fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
-        todo!()
+        let states = self.key_packages.lock().unwrap();
+        // Retrieve KeyPackageData2 and convert it to KeyPackageData
+        match states.get(id) {
+            Some(pkg2) => Ok(Some(pkg2.key_package_data.clone())),
+            None => Ok(None),
+        }
     }
 
     fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
-        todo!()
+        let mut states = self.key_packages.lock().unwrap();
+        states.remove(id);
+        Ok(())
     }
 }
