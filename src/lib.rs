@@ -8,8 +8,10 @@ use mls_rs::storage_provider::KeyPackageData;
 // use mls_rs::storage_provider::GroupState;
 use mls_rs::{
     group, CipherSuiteProvider, CryptoProvider, ExtensionList, GroupStateStorage,
-    KeyPackageStorage, MlsRules, ProtocolVersion,
+    KeyPackageStorage, MlsRules,
 };
+
+pub use state::PlatformState;
 
 ///
 /// Errors
@@ -40,6 +42,7 @@ pub struct GroupContextExtensions {
 
 // Definition of the type for the CipherSuite
 pub use mls_rs::CipherSuite;
+pub use mls_rs::ProtocolVersion;
 
 ///
 /// Group Configuration
@@ -131,12 +134,12 @@ pub struct SignatureKeypair {
 }
 
 // Stateless function
-fn mls_stateless_generate_signature_keypair(
+pub fn mls_stateless_generate_signature_keypair(
     name: &str,
     cs: CipherSuite,
     _randomness: Option<Vec<u8>>,
 ) -> Result<(SigningIdentity, SignatureSecretKey), MlsError> {
-    let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
+    let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
     // Generate a signature key pair.
@@ -161,6 +164,9 @@ pub fn mls_generate_signature_keypair(
     // Generate the signature key pair and the siging identity.
     let (myself, myself_sigkey) = mls_stateless_generate_signature_keypair(name, cs, _randomness)?;
 
+    // Print the signature key pair
+    println!("Signature key pair: {:?}", hex::encode(&myself_sigkey));
+
     // Store the signature key pair.
     state.insert_sigkey(&myself, &myself_sigkey, cs);
     Ok(myself)
@@ -172,7 +178,7 @@ pub fn mls_generate_signature_keypair(
 use mls_rs::identity::basic::{BasicCredential, BasicIdentityProvider};
 use sha2::digest::crypto_common::Key;
 use sha2::{Digest, Sha256};
-use state::{KeyPackageData2, PlatformState, SignatureData};
+use state::{KeyPackageData2, SignatureData};
 
 pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
     let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
@@ -260,13 +266,6 @@ pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIde
 /// https://github.com/awslabs/mls-rs/blob/main/mls-rs-provider-sqlite/src/connection_strategy.rs
 pub type GroupId = Vec<u8>;
 pub type GroupState = Vec<u8>;
-
-// TODO: Secure erasure
-pub fn generate_group_id(n: usize) -> Vec<u8> {
-    let mut r: Vec<u8> = vec![0; n]; // Assuming you want a 16-byte ID, adjust the size as needed
-    mls_rs_crypto_openssl::openssl::rand::rand_bytes(&mut r).unwrap();
-    r
-}
 
 pub fn mls_create_group(
     pstate: &mut PlatformState,
