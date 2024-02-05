@@ -114,7 +114,7 @@ fn main() -> Result<(), MlsError> {
     dbg!(format!("{message:?}"));
 
     // Generate the exported state for Alice
-    let _exported_state = state_alice.to_bytes().unwrap();
+    //let _exported_state = state_alice.to_bytes().unwrap();
 
     Ok(())
 }
