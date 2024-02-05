@@ -160,7 +160,7 @@ pub fn mls_generate_signature_keypair(
     let (myself, myself_sigkey) = mls_stateless_generate_signature_keypair(name, cs, _randomness)?;
 
     // Print the signature key pair
-    println!("Signature key pair: {:?}", hex::encode(&myself_sigkey));
+    println!("Signature Secret Key: {:?}", hex::encode(&myself_sigkey));
 
     // Store the signature key pair.
     state.insert_sigkey(&myself, &myself_sigkey, cs);
