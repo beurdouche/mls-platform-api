@@ -1,31 +1,24 @@
 mod state;
 
-use std::path::Path;
-
-use mls_rs::group::{CommitMessageDescription, ExportedTree, ReceivedMessage, Roster};
+use mls_rs::group::{ExportedTree, ReceivedMessage};
 use mls_rs::identity::SigningIdentity;
-use mls_rs::mls_rs_codec::MlsEncode;
-use mls_rs::mls_rules::{CommitDirection, CommitSource, ProposalBundle};
 use mls_rs::storage_provider::KeyPackageData;
 // use mls_rs::storage_provider::GroupState;
-use mls_rs::{
-    group, CipherSuiteProvider, CryptoProvider, ExtensionList, GroupStateStorage,
-    KeyPackageStorage, MlsRules,
-};
+use mls_rs::{CipherSuiteProvider, CryptoProvider, ExtensionList};
 
-pub use state::PlatformState;
+pub use state::{PlatformState, TemporaryState};
 
 ///
 /// Errors
 ///
 #[derive(Debug)]
 pub struct MlsError {
-    error: mls_rs::error::MlsError,
+    _error: mls_rs::error::MlsError,
 }
 
 impl From<mls_rs::error::MlsError> for MlsError {
-    fn from(error: mls_rs::error::MlsError) -> Self {
-        Self { error }
+    fn from(_error: mls_rs::error::MlsError) -> Self {
+        Self { _error }
     }
 }
 
@@ -33,7 +26,7 @@ impl From<mls_rs::error::MlsError> for MlsError {
 /// Generate a PlatformState.
 ///
 pub fn create_state(db_path: String) -> PlatformState {
-    PlatformState::new(Some(db_path)).unwrap()
+    PlatformState::new(db_path).unwrap()
 }
 
 // Definition of the GroupContext Extensions
@@ -177,10 +170,7 @@ pub fn mls_generate_signature_keypair(
 ///
 /// Generate a credential.
 ///
-use mls_rs::identity::basic::{BasicCredential, BasicIdentityProvider};
-use sha2::digest::crypto_common::Key;
-use sha2::{Digest, Sha256};
-use state::{KeyPackageData2, SignatureData};
+use mls_rs::identity::basic::BasicCredential;
 
 pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
     let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
@@ -207,13 +197,13 @@ pub struct KeyPackage {
     kp: mls_rs::KeyPackage,
 }
 
-fn mls_stateless_generate_key_package(
+pub fn mls_stateless_generate_key_package(
     group_config: Option<GroupConfig>,
     myself: SigningIdentity,
     myself_sigkey: SignatureSecretKey,
     _randomness: Option<Vec<u8>>,
 ) -> Result<(MlsMessage, KeyPackageData), MlsError> {
-    let mut state = PlatformState::new(None).unwrap();
+    let mut state = TemporaryState::new();
 
     state.insert_sigkey(
         &myself,

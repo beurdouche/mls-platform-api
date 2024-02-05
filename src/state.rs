@@ -1,12 +1,11 @@
 use std::{
-    borrow::Cow,
     collections::{hash_map::Entry, HashMap},
     path::Path,
     sync::{Arc, Mutex},
 };
 
 use mls_rs::{
-    client_builder::{ClientBuilder, MlsConfig},
+    client_builder::MlsConfig,
     crypto::SignatureSecretKey,
     identity::SigningIdentity,
     mls_rs_codec::{MlsDecode, MlsEncode},
@@ -68,7 +67,11 @@ impl<'de> Deserialize<'de> for KeyPackageData2 {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct PlatformState {
-    pub db_path: Option<String>,
+    pub db_path: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+pub struct TemporaryState {
     pub groups: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
     /// signing identity => key data
     pub sigkeys: HashMap<Vec<u8>, SignatureData>,
@@ -82,22 +85,9 @@ pub struct SignatureData {
     pub secret_key: Vec<u8>,
 }
 
-impl<'a> PlatformState {
-    pub fn new(db_path: Option<String>) -> Result<Self, mls_rs::mls_rs_codec::Error> {
-        Ok(Self {
-            groups: Default::default(),
-            sigkeys: Default::default(),
-            key_packages: Default::default(),
-            db_path,
-        })
-    }
-
-    pub fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(self)
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(bytes)
+impl PlatformState {
+    pub fn new(db_path: String) -> Result<Self, mls_rs::mls_rs_codec::Error> {
+        Ok(Self { db_path })
     }
 
     pub fn client(
@@ -107,7 +97,7 @@ impl<'a> PlatformState {
     ) -> Result<Client<impl MlsConfig>, MlsError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
         let myself_sigkey = self.get_sigkey(&myself).unwrap();
-        let engine = self.get_sqlite_engine().unwrap();
+        let engine = self.get_sqlite_engine();
 
         let mut builder = mls_rs::client_builder::ClientBuilder::new_sqlite(engine)
             .unwrap()
@@ -128,7 +118,60 @@ impl<'a> PlatformState {
         Ok(builder.build())
     }
 
-    pub fn stateless_client(
+    pub fn insert_sigkey(
+        &mut self,
+        myself: &SigningIdentity,
+        myself_sigkey: &SignatureSecretKey,
+        cs: CipherSuite,
+    ) {
+        let signature_data = SignatureData {
+            cs: *cs,
+            secret_key: myself_sigkey.to_vec(),
+        };
+
+        let key = myself.mls_encode_to_vec().unwrap();
+        let engine = self.get_sqlite_engine();
+        let storage = engine.application_data_storage().unwrap();
+        let data = bincode::serialize(&signature_data).unwrap();
+        storage.insert(hex::encode(key), data).unwrap();
+    }
+
+    pub fn get_sigkey(&self, myself: &SigningIdentity) -> Option<SignatureData> {
+        let key = myself.mls_encode_to_vec().unwrap();
+        let engine = self.get_sqlite_engine();
+        let storage = engine.application_data_storage().unwrap();
+        let data = storage.get(&hex::encode(key)).unwrap()?;
+
+        Some(bincode::deserialize(&data).unwrap())
+    }
+
+    fn get_sqlite_engine(&self) -> SqLiteDataStorageEngine<impl ConnectionStrategy> {
+        let path = Path::new(&self.db_path);
+        let file_conn = FileConnectionStrategy::new(path);
+
+        // todo get key from somewhere
+        let cipher_config = SqlCipherConfig::new(SqlCipherKey::RawKey([0u8; 32]));
+        let cipher_conn = CipheredConnectionStrategy::new(file_conn, cipher_config);
+
+        //Some(SqLiteDataStorageEngine::new(file_conn).unwrap())
+        SqLiteDataStorageEngine::new(cipher_conn).unwrap()
+    }
+}
+
+impl TemporaryState {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+        bincode::serialize(self)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
+        bincode::deserialize(bytes)
+    }
+
+    pub fn client(
         &self,
         myself: SigningIdentity,
         group_config: Option<GroupConfig>,
@@ -169,41 +212,17 @@ impl<'a> PlatformState {
 
         let key = myself.mls_encode_to_vec().unwrap();
 
-        if let Some(engine) = self.get_sqlite_engine() {
-            let storage = engine.application_data_storage().unwrap();
-            let data = bincode::serialize(&signature_data).unwrap();
-            storage.insert(hex::encode(key), data).unwrap();
-        } else {
-            self.sigkeys.insert(key, signature_data);
-        }
+        self.sigkeys.insert(key, signature_data);
     }
 
     pub fn get_sigkey(&self, myself: &SigningIdentity) -> Option<SignatureData> {
         let key = myself.mls_encode_to_vec().unwrap();
 
-        if let Some(engine) = self.get_sqlite_engine() {
-            let storage = engine.application_data_storage().unwrap();
-            let data = storage.get(&hex::encode(key)).unwrap()?;
-            Some(bincode::deserialize(&data).unwrap())
-        } else {
-            self.sigkeys.get(&key).cloned()
-        }
-    }
-
-    fn get_sqlite_engine(&self) -> Option<SqLiteDataStorageEngine<impl ConnectionStrategy>> {
-        let path = Path::new(self.db_path.as_ref()?);
-        let file_conn = FileConnectionStrategy::new(path);
-
-        // todo get key from somewhere
-        let cipher_config = SqlCipherConfig::new(SqlCipherKey::RawKey([0u8; 32]));
-        let cipher_conn = CipheredConnectionStrategy::new(file_conn, cipher_config);
-
-        //Some(SqLiteDataStorageEngine::new(file_conn).unwrap())
-        Some(SqLiteDataStorageEngine::new(cipher_conn).unwrap())
+        self.sigkeys.get(&key).cloned()
     }
 }
 
-impl GroupStateStorage for PlatformState {
+impl GroupStateStorage for TemporaryState {
     type Error = mls_rs::mls_rs_codec::Error;
 
     fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
@@ -284,7 +303,7 @@ impl GroupStateStorage for PlatformState {
     }
 }
 
-impl KeyPackageStorage for PlatformState {
+impl KeyPackageStorage for TemporaryState {
     type Error = mls_rs::mls_rs_codec::Error;
 
     fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
