@@ -1,15 +1,24 @@
 use std::{
+    borrow::Cow,
     collections::{hash_map::Entry, HashMap},
+    path::Path,
     sync::{Arc, Mutex},
 };
 
 use mls_rs::{
-    client_builder::MlsConfig,
+    client_builder::{ClientBuilder, MlsConfig},
     crypto::SignatureSecretKey,
     identity::SigningIdentity,
     mls_rs_codec::{MlsDecode, MlsEncode},
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
     CipherSuite, Client, GroupStateStorage, KeyPackageStorage,
+};
+use mls_rs_provider_sqlite::{
+    connection_strategy::{
+        CipheredConnectionStrategy, ConnectionStrategy, FileConnectionStrategy, SqlCipherConfig,
+        SqlCipherKey,
+    },
+    SqLiteDataStorageEngine,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -59,10 +68,10 @@ impl<'de> Deserialize<'de> for KeyPackageData2 {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct PlatformState {
+    pub db_path: Option<String>,
     pub groups: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
     /// signing identity => key data
     pub sigkeys: HashMap<Vec<u8>, SignatureData>,
-    // pub key_packages: Arc<Mutex<HashMap<Vec<u8>, MlsMessage>>>,
     pub key_packages: Arc<Mutex<HashMap<Vec<u8>, KeyPackageData2>>>,
 }
 
@@ -73,12 +82,13 @@ pub struct SignatureData {
     pub secret_key: Vec<u8>,
 }
 
-impl PlatformState {
-    pub fn new() -> Result<Self, mls_rs::mls_rs_codec::Error> {
+impl<'a> PlatformState {
+    pub fn new(db_path: Option<String>) -> Result<Self, mls_rs::mls_rs_codec::Error> {
         Ok(Self {
             groups: Default::default(),
             sigkeys: Default::default(),
             key_packages: Default::default(),
+            db_path,
         })
     }
 
@@ -96,20 +106,44 @@ impl PlatformState {
         group_config: Option<GroupConfig>,
     ) -> Result<Client<impl MlsConfig>, MlsError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let myself_sigkey = self.get_sigkey(&myself).unwrap();
+        let engine = self.get_sqlite_engine().unwrap();
 
-        let myself_sigkey = self
-            .sigkeys
-            .get(&myself.mls_encode_to_vec().unwrap())
-            .unwrap();
-
-        let mut builder = mls_rs::Client::builder()
+        let mut builder = mls_rs::client_builder::ClientBuilder::new_sqlite(engine)
+            .unwrap()
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
-            .group_state_storage(self.clone())
-            .key_package_repo(self.clone())
             .signing_identity(
                 myself,
-                myself_sigkey.secret_key.clone().into(),
+                myself_sigkey.secret_key.into(),
+                myself_sigkey.cs.into(),
+            );
+
+        if let Some(config) = group_config {
+            builder = builder
+                .key_package_extensions(config.options)
+                .protocol_version(config.version);
+        }
+
+        Ok(builder.build())
+    }
+
+    pub fn stateless_client(
+        &self,
+        myself: SigningIdentity,
+        group_config: Option<GroupConfig>,
+    ) -> Result<Client<impl MlsConfig>, MlsError> {
+        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let myself_sigkey = self.get_sigkey(&myself).unwrap();
+
+        let mut builder = mls_rs::client_builder::ClientBuilder::new()
+            .key_package_repo(self.clone())
+            .group_state_storage(self.clone())
+            .crypto_provider(crypto_provider)
+            .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
+            .signing_identity(
+                myself,
+                myself_sigkey.secret_key.into(),
                 myself_sigkey.cs.into(),
             );
 
@@ -128,13 +162,44 @@ impl PlatformState {
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
     ) {
-        self.sigkeys.insert(
-            myself.mls_encode_to_vec().unwrap(),
-            SignatureData {
-                cs: *cs,
-                secret_key: myself_sigkey.to_vec(),
-            },
-        );
+        let signature_data = SignatureData {
+            cs: *cs,
+            secret_key: myself_sigkey.to_vec(),
+        };
+
+        let key = myself.mls_encode_to_vec().unwrap();
+
+        if let Some(engine) = self.get_sqlite_engine() {
+            let storage = engine.application_data_storage().unwrap();
+            let data = bincode::serialize(&signature_data).unwrap();
+            storage.insert(hex::encode(key), data).unwrap();
+        } else {
+            self.sigkeys.insert(key, signature_data);
+        }
+    }
+
+    pub fn get_sigkey(&self, myself: &SigningIdentity) -> Option<SignatureData> {
+        let key = myself.mls_encode_to_vec().unwrap();
+
+        if let Some(engine) = self.get_sqlite_engine() {
+            let storage = engine.application_data_storage().unwrap();
+            let data = storage.get(&hex::encode(key)).unwrap()?;
+            Some(bincode::deserialize(&data).unwrap())
+        } else {
+            self.sigkeys.get(&key).cloned()
+        }
+    }
+
+    fn get_sqlite_engine(&self) -> Option<SqLiteDataStorageEngine<impl ConnectionStrategy>> {
+        let path = Path::new(self.db_path.as_ref()?);
+        let file_conn = FileConnectionStrategy::new(path);
+
+        // todo get key from somewhere
+        let cipher_config = SqlCipherConfig::new(SqlCipherKey::RawKey([0u8; 32]));
+        let cipher_conn = CipheredConnectionStrategy::new(file_conn, cipher_config);
+
+        //Some(SqLiteDataStorageEngine::new(file_conn).unwrap())
+        Some(SqLiteDataStorageEngine::new(cipher_conn).unwrap())
     }
 }
 

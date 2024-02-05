@@ -1,5 +1,7 @@
 mod state;
 
+use std::path::Path;
+
 use mls_rs::group::{CommitMessageDescription, ExportedTree, ReceivedMessage, Roster};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::MlsEncode;
@@ -30,8 +32,8 @@ impl From<mls_rs::error::MlsError> for MlsError {
 ///
 /// Generate a PlatformState.
 ///
-pub fn create_state() -> PlatformState {
-    PlatformState::new().unwrap()
+pub fn create_state(db_path: String) -> PlatformState {
+    PlatformState::new(Some(db_path)).unwrap()
 }
 
 // Definition of the GroupContext Extensions
@@ -211,7 +213,7 @@ fn mls_stateless_generate_key_package(
     myself_sigkey: SignatureSecretKey,
     _randomness: Option<Vec<u8>>,
 ) -> Result<(MlsMessage, KeyPackageData), MlsError> {
-    let mut state = create_state();
+    let mut state = PlatformState::new(None).unwrap();
 
     state.insert_sigkey(
         &myself,

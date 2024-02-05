@@ -1,5 +1,8 @@
 use mls_platform_api::MlsMessageOrAck;
-use mls_rs::error::MlsError;
+use mls_rs::{
+    error::MlsError,
+    identity::{basic::BasicCredential, SigningIdentity},
+};
 
 const CIPHERSUITE: mls_platform_api::CipherSuite =
     // MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
@@ -12,17 +15,27 @@ fn main() -> Result<(), MlsError> {
         mls_platform_api::mls_create_group_config(CIPHERSUITE, VERSION, Default::default())
             .unwrap();
 
-    let mut state_alice = mls_platform_api::create_state();
-    let mut state_bob = mls_platform_api::create_state();
+    let mut state_alice = mls_platform_api::create_state("sqlite/alice".into());
+    let mut state_bob = mls_platform_api::create_state("sqlite/bob".into());
 
     // Create signature keypairs
-    let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
+    /*let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
         &mut state_alice,
         "alice",
         CIPHERSUITE,
         None,
     )
     .unwrap();
+
+    dbg!(hex::encode(&alice_signing_id.signature_key));*/
+
+    // Alice's key is stored in the DB
+    let alice_signing_id = SigningIdentity::new(
+        BasicCredential::new(b"alice".into()).into_credential(),
+        hex::decode("0f210723849278dfa71dab150343cdf471f80dc097dca57c91f096a3c50c2f1b")
+            .unwrap()
+            .into(),
+    );
 
     let bob_signing_id =
         mls_platform_api::mls_generate_signature_keypair(&mut state_bob, "bob", CIPHERSUITE, None)
