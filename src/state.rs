@@ -87,8 +87,15 @@ pub struct SignatureData {
 
 impl PlatformState {
     pub fn new(db_path: String) -> Result<Self, mls_rs::mls_rs_codec::Error> {
-        // TODO: I think we want to create the database here
-        Ok(Self { db_path })
+        let state = Self { db_path };
+
+        // This will create an empty database if it doesn't exist.
+        state
+            .get_sqlite_engine()
+            .application_data_storage()
+            .unwrap();
+
+        Ok(state)
     }
 
     pub fn get_signing_identities(&self) -> Result<Vec<SigningIdentity>, MlsError> {
