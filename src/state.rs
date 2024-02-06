@@ -90,6 +90,10 @@ impl PlatformState {
         Ok(Self { db_path })
     }
 
+    pub fn get_signing_identities(&self) -> Result<Vec<SigningIdentity>, MlsError> {
+        todo!();
+    }
+
     pub fn client(
         &self,
         myself: SigningIdentity,
