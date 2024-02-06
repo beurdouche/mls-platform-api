@@ -87,6 +87,7 @@ pub struct SignatureData {
 
 impl PlatformState {
     pub fn new(db_path: String) -> Result<Self, mls_rs::mls_rs_codec::Error> {
+        // TODO: I think we want to create the database here
         Ok(Self { db_path })
     }
 
