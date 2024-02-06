@@ -51,6 +51,19 @@ pub struct GroupConfig {
     pub options: ExtensionList,
 }
 
+impl Default for GroupConfig {
+    fn default() -> Self {
+        GroupConfig {
+            // Set default ciphersuite.
+            ciphersuite: CipherSuite::CURVE25519_AES128,
+            // Set default protocol version.
+            version: ProtocolVersion::MLS_10,
+            // Set default options.
+            options: ExtensionList::new(),
+        }
+    }
+}
+
 /// Group configuration.
 ///
 /// This is more or less only for Ciphersuites and GroupContext extensions
