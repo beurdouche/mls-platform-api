@@ -4,8 +4,8 @@ use mls_rs::group::{ExportedTree, ReceivedMessage};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::storage_provider::KeyPackageData;
 // use mls_rs::storage_provider::GroupState;
+use mls_rs::mls_rs_codec::{self, MlsDecode, MlsEncode};
 use mls_rs::{CipherSuiteProvider, CryptoProvider, ExtensionList};
-
 pub use state::{PlatformState, TemporaryState};
 
 ///
@@ -139,6 +139,18 @@ use mls_rs::crypto::SignatureSecretKey;
 pub struct SignatureKeypair {
     pub secret: SignatureSecretKey,
     pub public: SignaturePublicKey,
+}
+
+pub fn serialize_signing_identity(
+    signing_identity: &SigningIdentity,
+) -> Result<Vec<u8>, mls_rs::mls_rs_codec::Error> {
+    Ok(signing_identity.mls_encode_to_vec()?)
+}
+
+pub fn deserialize_signing_identity(
+    bytes: &[u8],
+) -> Result<SigningIdentity, mls_rs::mls_rs_codec::Error> {
+    Ok(SigningIdentity::mls_decode(&mut bytes.as_ref())?)
 }
 
 // Stateless function
