@@ -11,6 +11,7 @@ pub use state::{PlatformState, TemporaryState};
 
 pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
 pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
+pub use mls_rs::MlsMessage;
 
 ///
 /// Errors
@@ -254,7 +255,7 @@ pub fn generate_key_package(
     myself: SigningIdentity,
     group_config: Option<GroupConfig>,
     _randomness: Option<Vec<u8>>,
-) -> Result<mls_rs::MlsMessage, MlsError> {
+) -> Result<MlsMessage, MlsError> {
     // Create a client for that artificial state
     let client = state.client(myself, group_config)?;
 
@@ -354,8 +355,6 @@ pub fn mls_create_group(
 /// The application should be able to decide this based on their access control
 /// either on client side or server side (eg the user X doesn't have permission
 /// to approve add requests to a groupID).
-
-pub type MlsMessage = mls_rs::MlsMessage;
 
 // TODO: This should not be "add user" but maybe "group add" instead.
 pub fn mls_add_user(
@@ -561,7 +560,7 @@ pub fn mls_send_groupcontextextension(
 }
 
 // To leave the group
-pub fn mls_leave(
+pub fn mls_propose_leave(
     pstate: PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
@@ -570,10 +569,6 @@ pub fn mls_leave(
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
     let self_index = group.current_member_index();
     let proposal = group.propose_remove(self_index, vec![])?;
-
-    // Leave and zero out all the states: RemoveProposal
-    // TODO do we want to delete the state before we know proposal was committed?
-    pstate.delete().unwrap();
 
     Ok(proposal)
 }
