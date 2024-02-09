@@ -12,8 +12,8 @@ fn main() -> Result<(), MlsError> {
         mls_platform_api::mls_create_group_config(CIPHERSUITE, VERSION, Default::default())
             .unwrap();
 
-    let mut state_alice = mls_platform_api::create_state("sqlite/alice".into());
-    let mut state_bob = mls_platform_api::create_state("sqlite/bob".into());
+    let mut state_alice = mls_platform_api::state("sqlite/alice".into(), [0u8; 32]);
+    let mut state_bob = mls_platform_api::state("sqlite/bob".into(), [0u8; 32]);
 
     // Create signature keypairs
     let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(

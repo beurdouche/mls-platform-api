@@ -765,6 +765,7 @@ dependencies = [
  "mls-rs-provider-sqlite",
  "serde",
  "sha2",
+ "thiserror",
 ]
 
 [[package]]

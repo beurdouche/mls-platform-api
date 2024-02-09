@@ -6,7 +6,7 @@ use mls_rs::identity::SigningIdentity;
 use mls_rs::storage_provider::KeyPackageData;
 // use mls_rs::storage_provider::GroupState;
 use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
-use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList, IdentityProvider};
+use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
 pub use state::{PlatformState, TemporaryState};
 
 pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
@@ -16,23 +16,23 @@ pub use mls_rs::MlsMessage;
 ///
 /// Errors
 ///
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum MlsError {
-    MlsError(mls_rs::error::MlsError),
+    #[error(transparent)]
+    MlsError(#[from] mls_rs::error::MlsError),
+    #[error("IdentityError")]
     IdentityError,
-}
-
-impl From<mls_rs::error::MlsError> for MlsError {
-    fn from(error: mls_rs::error::MlsError) -> Self {
-        Self::MlsError(error)
-    }
+    #[error("UnsupportedCiphersuite")]
+    UnsupportedCiphersuite,
+    #[error(transparent)]
+    MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
 }
 
 ///
 /// Generate a PlatformState.
 ///
-pub fn state(db_path: String) -> PlatformState {
-    PlatformState::new(db_path).unwrap()
+pub fn state(db_path: String, db_key: [u8; 32]) -> PlatformState {
+    PlatformState::new(db_path, db_key).unwrap()
 }
 
 ///
@@ -276,7 +276,7 @@ pub fn generate_key_package(
 ///
 #[derive(Clone, Debug)]
 pub struct Identity(Vec<u8>); // "google.com@groupId@clientId" <-> SigningIdentity
-pub struct Epoch {} // u32 // u64?
+pub struct Epoch {} // u64?
 
 pub fn mls_members(
     state: &PlatformState,
@@ -284,24 +284,14 @@ pub fn mls_members(
     group_config: Option<GroupConfig>,
     gid: &GroupId,
 ) -> Result<(u64, Vec<(Identity, SigningIdentity)>), MlsError> {
+    let cs = group_config.as_ref().unwrap().ciphersuite;
     let group = state.client(myself, group_config)?.load_group(gid)?;
-
     let epoch = group.current_epoch();
-    let extensions = group.context().extensions();
-    let id_provider = DefaultIdentityProvider::default();
 
     let members = group
         .roster()
         .member_identities_iter()
-        .map(|identity| {
-            Ok((
-                id_provider
-                    .identity(identity, extensions)
-                    .map(Identity)
-                    .map_err(|_| MlsError::IdentityError)?,
-                identity.clone(),
-            ))
-        })
+        .map(|identity| Ok((mls_identity(identity, cs)?, identity.clone())))
         .collect::<Result<Vec<_>, MlsError>>()?;
 
     Ok((epoch, members))
@@ -674,6 +664,18 @@ pub fn mls_import_group_state(
 
 pub fn mls_export_group_state(gid: GroupId) -> Result<PublicGroupState, MlsError> {
     unimplemented!()
+}
+
+pub fn mls_identity(
+    signing_identity: &SigningIdentity,
+    cs: CipherSuite,
+) -> Result<Identity, MlsError> {
+    DefaultCryptoProvider::default()
+        .cipher_suite_provider(cs)
+        .ok_or(MlsError::UnsupportedCiphersuite)?
+        .hash(&signing_identity.mls_encode_to_vec()?)
+        .map(Identity)
+        .map_err(|_| MlsError::IdentityError)
 }
 
 // ///

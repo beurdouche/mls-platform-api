@@ -68,6 +68,7 @@ impl<'de> Deserialize<'de> for KeyPackageData2 {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct PlatformState {
     pub db_path: String,
+    pub db_key: [u8; 32],
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
@@ -86,8 +87,8 @@ pub struct SignatureData {
 }
 
 impl PlatformState {
-    pub fn new(db_path: String) -> Result<Self, mls_rs::mls_rs_codec::Error> {
-        let state = Self { db_path };
+    pub fn new(db_path: String, db_key: [u8; 32]) -> Result<Self, mls_rs::mls_rs_codec::Error> {
+        let state = Self { db_path, db_key };
 
         // This will create an empty database if it doesn't exist.
         state
