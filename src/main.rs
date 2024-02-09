@@ -1,16 +1,8 @@
 use mls_platform_api::MlsMessageOrAck;
 use mls_rs::error::MlsError;
 
-const CIPHERSUITE: mls_platform_api::CipherSuite =
-    // MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
-    mls_platform_api::CipherSuite::CURVE25519_AES128;
-
-const VERSION: mls_rs::ProtocolVersion = mls_rs::ProtocolVersion::MLS_10;
-
 fn main() -> Result<(), MlsError> {
-    let group_config =
-        mls_platform_api::mls_create_group_config(CIPHERSUITE, VERSION, Default::default())
-            .unwrap();
+    let group_config = mls_platform_api::GroupConfig::default();
 
     let mut state_alice = mls_platform_api::state("sqlite/alice".into(), [0u8; 32]);
     let mut state_bob = mls_platform_api::state("sqlite/bob".into(), [0u8; 32]);
@@ -19,7 +11,7 @@ fn main() -> Result<(), MlsError> {
     let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
         &mut state_alice,
         "alice",
-        CIPHERSUITE,
+        group_config.ciphersuite,
         None,
     )
     .unwrap();
@@ -34,9 +26,13 @@ fn main() -> Result<(), MlsError> {
             .into(),
     );*/
 
-    let bob_signing_id =
-        mls_platform_api::mls_generate_signature_keypair(&mut state_bob, "bob", CIPHERSUITE, None)
-            .unwrap();
+    let bob_signing_id = mls_platform_api::mls_generate_signature_keypair(
+        &mut state_bob,
+        "bob",
+        group_config.ciphersuite,
+        None,
+    )
+    .unwrap();
 
     // Create key package for Bob
     let bob_kp = mls_platform_api::generate_key_package(
@@ -61,7 +57,7 @@ fn main() -> Result<(), MlsError> {
     dbg!("group created", hex::encode(&gid));
 
     // Add bob
-    let (_commit, welcome) = mls_platform_api::mls_add_user(
+    let (_commit, welcome) = mls_platform_api::mls_group_add(
         &mut state_alice,
         &gid,
         Some(group_config.clone()),
@@ -70,7 +66,7 @@ fn main() -> Result<(), MlsError> {
     )
     .unwrap();
 
-    mls_platform_api::mls_process_received_message(
+    mls_platform_api::mls_receive_message(
         &state_alice,
         &gid,
         alice_signing_id.clone(),
@@ -80,7 +76,7 @@ fn main() -> Result<(), MlsError> {
     .unwrap();
 
     // Bob joins
-    mls_platform_api::mls_process_received_join_message(
+    mls_platform_api::mls_group_join(
         &state_bob,
         bob_signing_id.clone(),
         Some(group_config.clone()),
@@ -90,7 +86,7 @@ fn main() -> Result<(), MlsError> {
     .unwrap();
 
     // Bob sends message to alice
-    let ciphertext = mls_platform_api::mls_encrypt_message(
+    let ciphertext = mls_platform_api::mls_encrypt(
         &state_bob,
         &gid,
         bob_signing_id,
@@ -99,7 +95,7 @@ fn main() -> Result<(), MlsError> {
     )
     .unwrap();
 
-    let message = mls_platform_api::mls_process_received_message(
+    let message = mls_platform_api::mls_receive_message(
         &state_alice,
         &gid,
         alice_signing_id.clone(),
