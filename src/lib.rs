@@ -1,24 +1,29 @@
 mod state;
 
+use mls_rs::group::proposal::{CustomProposal, ProposalType};
 use mls_rs::group::{ExportedTree, ReceivedMessage};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::storage_provider::KeyPackageData;
 // use mls_rs::storage_provider::GroupState;
-use mls_rs::mls_rs_codec::{self, MlsDecode, MlsEncode};
-use mls_rs::{CipherSuiteProvider, CryptoProvider, ExtensionList};
+use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
+use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList, IdentityProvider};
 pub use state::{PlatformState, TemporaryState};
+
+pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
+pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
 
 ///
 /// Errors
 ///
 #[derive(Debug)]
-pub struct MlsError {
-    _error: mls_rs::error::MlsError,
+pub enum MlsError {
+    MlsError(mls_rs::error::MlsError),
+    IdentityError,
 }
 
 impl From<mls_rs::error::MlsError> for MlsError {
-    fn from(_error: mls_rs::error::MlsError) -> Self {
-        Self { _error }
+    fn from(error: mls_rs::error::MlsError) -> Self {
+        Self::MlsError(error)
     }
 }
 
@@ -159,7 +164,7 @@ pub fn mls_stateless_generate_signature_keypair(
     cs: CipherSuite,
     _randomness: Option<Vec<u8>>,
 ) -> Result<(SigningIdentity, SignatureSecretKey), MlsError> {
-    let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+    let crypto_provider = DefaultCryptoProvider::default();
     let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
 
     // Generate a signature key pair.
@@ -217,11 +222,6 @@ pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
 
 // TODO: Look into capabilities that might be missing here...
 
-#[derive(Debug)]
-pub struct KeyPackage {
-    kp: mls_rs::KeyPackage,
-}
-
 pub fn mls_stateless_generate_key_package(
     group_config: Option<GroupConfig>,
     myself: SigningIdentity,
@@ -257,7 +257,7 @@ pub fn generate_key_package(
     _randomness: Option<Vec<u8>>,
 ) -> Result<mls_rs::MlsMessage, MlsError> {
     // Create a client for that artificial state
-    let client = state.client(myself, group_config.clone())?;
+    let client = state.client(myself, group_config)?;
 
     // Generate a KeyPackage from that Client
     let key_package = client.generate_key_package_message()?;
@@ -267,11 +267,37 @@ pub fn generate_key_package(
 ///
 /// Get group members.
 ///
-pub struct Identity {} // "google.com@groupId@clientId" <-> SigningIdentity
-pub struct Epoch {} // u32
+#[derive(Clone, Debug)]
+pub struct Identity(Vec<u8>); // "google.com@groupId@clientId" <-> SigningIdentity
+pub struct Epoch {} // u32 // u64?
 
-pub fn mls_members(gid: GroupId) -> Result<(Epoch, Vec<Identity>, Vec<SigningIdentity>), MlsError> {
-    unimplemented!()
+pub fn mls_members(
+    state: &PlatformState,
+    myself: SigningIdentity,
+    group_config: Option<GroupConfig>,
+    gid: &GroupId,
+) -> Result<(u64, Vec<(Identity, SigningIdentity)>), MlsError> {
+    let group = state.client(myself, group_config)?.load_group(gid)?;
+
+    let epoch = group.current_epoch();
+    let extensions = group.context().extensions();
+    let id_provider = DefaultIdentityProvider::default();
+
+    let members = group
+        .roster()
+        .member_identities_iter()
+        .map(|identity| {
+            Ok((
+                id_provider
+                    .identity(identity, extensions)
+                    .map(Identity)
+                    .map_err(|_| MlsError::IdentityError)?,
+                identity.clone(),
+            ))
+        })
+        .collect::<Result<Vec<_>, MlsError>>()?;
+
+    Ok((epoch, members))
 }
 
 /// To create a group for one person.
@@ -374,20 +400,46 @@ pub fn mls_add_user(
 // We can't really use the KeyPackage to remove a user.
 // We need to use the identity of the user to remove them.
 
-pub fn mls_rem_user(
+pub fn mls_rem_member(
+    pstate: &PlatformState,
     gid: GroupId,
-    user: Identity,
-    my_identity: SigningIdentity,
-) -> Result<MlsMessage, MlsError> {
-    unimplemented!()
+    group_config: Option<GroupConfig>,
+    removed: SigningIdentity,
+    myself: SigningIdentity,
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+
+    // TODO introduce custom error type for this lib
+    let removed = group
+        .roster()
+        .members_iter()
+        .find_map(|m| (m.signing_identity == removed).then_some(m.index))
+        .unwrap();
+
+    let commit = group.commit_builder().remove_member(removed)?.build()?;
+
+    Ok(commit.commit_message)
 }
 
 pub fn mls_propose_rem_user(
+    pstate: &PlatformState,
     gid: GroupId,
-    user: Identity,
-    my_identity: SigningIdentity,
-) -> Result<MlsMessage, MlsError> {
-    unimplemented!()
+    group_config: Option<GroupConfig>,
+    removed: SigningIdentity,
+    myself: SigningIdentity,
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+
+    // TODO introduce custom error type for this lib
+    let removed = group
+        .roster()
+        .members_iter()
+        .find_map(|m| (m.signing_identity == removed).then_some(m.index))
+        .unwrap();
+
+    let proposal = group.propose_remove(removed, vec![])?;
+
+    Ok(proposal)
 }
 
 ///
@@ -402,7 +454,7 @@ pub fn mls_update(
     gid: GroupId,
     pstate: &mut PlatformState,
     myself: SigningIdentity,
-    rng: Option<[u8; 32]>,
+    _rng: Option<[u8; 32]>,
 ) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
     let client = pstate.client(myself, None)?;
@@ -470,40 +522,92 @@ pub fn mls_process_received_join_message(
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<(), MlsError> {
     let client = pstate.client(myself, group_config)?;
-    let (mut group, info) = client.join_group(ratchet_tree, welcome)?;
+    let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
     group.write_to_storage()?;
 
     Ok(())
 }
 
-pub struct ProposalType; //u16
-
 pub fn mls_send_custom_proposal(
+    pstate: &PlatformState,
+    gid: GroupId,
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
     proposal_type: ProposalType,
     data: Vec<u8>,
-) -> Result<MlsMessage, MlsError> {
-    unimplemented!()
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let custom_proposal = CustomProposal::new(proposal_type, data);
+    let proposal = group.propose_custom(custom_proposal, vec![])?;
+
+    Ok(proposal)
 }
 
-pub struct GroupContextExtensionType; //u16
+pub fn mls_send_groupcontextextension(
+    pstate: &PlatformState,
+    gid: GroupId,
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
+    new_gce: Vec<Extension>,
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
-pub fn mls_send_custom_groupcontextextension(
-    gce_type: GroupContextExtensionType,
-    data: Vec<u8>,
-) -> Result<MlsMessage, MlsError> {
-    unimplemented!()
+    let commit = group
+        .commit_builder()
+        .set_group_context_ext(new_gce.into())?
+        .build()?;
+
+    Ok(commit.commit_message)
 }
 
 // To leave the group
-pub fn mls_leave(gid: GroupId, my_key_package: KeyPackage) -> Result<(), MlsError> {
+pub fn mls_leave(
+    pstate: PlatformState,
+    gid: GroupId,
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let self_index = group.current_member_index();
+    let proposal = group.propose_remove(self_index, vec![])?;
+
     // Leave and zero out all the states: RemoveProposal
-    unimplemented!()
+    // TODO do we want to delete the state before we know proposal was committed?
+    pstate.delete().unwrap();
+
+    Ok(proposal)
 }
 
 // To close a group i.e., removing all members of the group.
-fn mls_close(gid: GroupId) -> Result<bool, MlsError> {
+// TODO would this be better with a custom proposal?
+pub fn mls_close(
+    pstate: PlatformState,
+    gid: GroupId,
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
+) -> Result<mls_rs::MlsMessage, MlsError> {
     // Remove everyone from the group.
-    unimplemented!()
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let self_index = group.current_member_index();
+
+    let all_but_me = group
+        .roster()
+        .members_iter()
+        .filter_map(|m| (m.index != self_index).then_some(m.index))
+        .collect::<Vec<_>>();
+
+    let commit = all_but_me
+        .into_iter()
+        .try_fold(group.commit_builder(), |builder, index| {
+            builder.remove_member(index)
+        })?
+        .build()?;
+
+    // TODO we should delete state when we receive an ACK. but it's not super clear how to
+    // determine on receive that this was a "close" commit. Would be easier if we had a custom
+    // proposal
+
+    Ok(commit.commit_message)
 }
 
 //
@@ -536,22 +640,31 @@ pub struct PublicGroupState {}
 /// Export a group secret.
 ///
 pub fn mls_export(
-    gid: GroupId,
-    my_key_package: KeyPackage,
-    label: String,
-    epoch_number: Option<u32>,
+    pstate: &PlatformState,
+    gid: &GroupId,
+    myself: SigningIdentity,
+    group_config: Option<GroupConfig>,
+    label: &[u8],   // fixed by IANA registry
+    context: &[u8], // arbitrary
+    len: usize,     // exporting from past epoch is not supported because we didn't see use cases
+    _epoch_number: Option<u32>,
 ) -> Result<(Vec<u8>, u32), MlsError> {
     // KDF of the secret of the current epoch.
-    unimplemented!()
+    let group = pstate.client(myself, group_config)?.load_group(gid)?;
+    let secret = group.export_secret(label, context, len)?.to_vec();
+
+    // TODO what is the second tuple element?
+    Ok((secret, 0))
 }
 
 ///
 /// Import a group state into the storage
 ///
+// TODO is this needed?
 pub fn mls_import_group_state(
     group_state: Vec<u8>,
     signature_key: SignatureKeypair,
-    my_key_package: KeyPackage,
+    myself: SigningIdentity,
 ) -> Result<(), MlsError> {
     unimplemented!()
     // https://github.com/awslabs/mls-rs/blob/main/mls-rs/src/client.rs#L605

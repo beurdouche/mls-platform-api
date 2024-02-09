@@ -1,8 +1,5 @@
 use mls_platform_api::MlsMessageOrAck;
-use mls_rs::{
-    error::MlsError,
-    identity::{basic::BasicCredential, SigningIdentity},
-};
+use mls_rs::error::MlsError;
 
 const CIPHERSUITE: mls_platform_api::CipherSuite =
     // MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519
@@ -105,13 +102,19 @@ fn main() -> Result<(), MlsError> {
     let message = mls_platform_api::mls_process_received_message(
         &state_alice,
         &gid,
-        alice_signing_id,
+        alice_signing_id.clone(),
         MlsMessageOrAck::MlsMessage(ciphertext),
-        Some(group_config),
+        Some(group_config.clone()),
     )
     .unwrap();
 
     dbg!(format!("{message:?}"));
+
+    let members =
+        mls_platform_api::mls_members(&state_alice, alice_signing_id, Some(group_config), &gid)
+            .unwrap();
+
+    dbg!(format!("{members:?}"));
 
     // Generate the exported state for Alice
     //let _exported_state = state_alice.to_bytes().unwrap();
