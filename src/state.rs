@@ -162,11 +162,9 @@ impl PlatformState {
         let path = Path::new(&self.db_path);
         let file_conn = FileConnectionStrategy::new(path);
 
-        // todo get key from somewhere
-        let cipher_config = SqlCipherConfig::new(SqlCipherKey::RawKey([0u8; 32]));
+        let cipher_config = SqlCipherConfig::new(SqlCipherKey::RawKey(self.db_key));
         let cipher_conn = CipheredConnectionStrategy::new(file_conn, cipher_config);
 
-        //Some(SqLiteDataStorageEngine::new(file_conn).unwrap())
         SqLiteDataStorageEngine::new(cipher_conn).unwrap()
     }
 
