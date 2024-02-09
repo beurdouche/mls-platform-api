@@ -356,15 +356,16 @@ pub fn mls_create_group(
 /// either on client side or server side (eg the user X doesn't have permission
 /// to approve add requests to a groupID).
 
-pub type MlsMessage = Vec<u8>;
+pub type MlsMessage = mls_rs::MlsMessage;
 
+// TODO: This should not be "add user" but maybe "group add" instead.
 pub fn mls_add_user(
     pstate: &mut PlatformState,
     gid: &GroupId,
     group_config: Option<GroupConfig>,
-    user: Vec<mls_rs::MlsMessage>,
+    user: Vec<MlsMessage>,
     myself: SigningIdentity,
-) -> Result<(mls_rs::MlsMessage, mls_rs::MlsMessage), MlsError> {
+) -> Result<(MlsMessage, MlsMessage), MlsError> {
     // Get the group from the state
     let client = pstate.client(myself, group_config)?;
     let mut group = client.load_group(gid)?;
@@ -481,7 +482,7 @@ pub fn mls_update(
 
 pub enum MlsMessageOrAck {
     Ack,
-    MlsMessage(mls_rs::MlsMessage),
+    MlsMessage(MlsMessage),
 }
 
 pub fn mls_process_received_message(
@@ -518,7 +519,7 @@ pub fn mls_process_received_join_message(
     pstate: &PlatformState,
     myself: SigningIdentity,
     group_config: Option<GroupConfig>,
-    welcome: mls_rs::MlsMessage,
+    welcome: MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<(), MlsError> {
     let client = pstate.client(myself, group_config)?;
@@ -620,7 +621,7 @@ pub fn mls_encrypt_message(
     myself: SigningIdentity,
     group_config: Option<GroupConfig>,
     message: &[u8],
-) -> Result<mls_rs::MlsMessage, MlsError> {
+) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
 
     let out = group.encrypt_application_message(message, vec![])?;
