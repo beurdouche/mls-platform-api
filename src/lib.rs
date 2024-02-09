@@ -102,7 +102,7 @@ pub fn deserialize_signing_identity(
 ///
 /// Generate a credential.
 ///
-pub fn generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
+pub fn mls_generate_credential(name: &str) -> Result<BasicCredential, MlsError> {
     let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
     Ok(credential)
 }
@@ -124,7 +124,7 @@ pub fn mls_generate_signature_keypair(
 
     // Create the credential and the signing identity.
     // TODO: Handle X.509 certificates
-    let credential = generate_credential(name)?;
+    let credential = mls_generate_credential(name)?;
     let signing_identity: SigningIdentity =
         SigningIdentity::new(credential.into_credential(), signature_pubkey);
 
@@ -139,7 +139,7 @@ pub fn mls_generate_signature_keypair(
 ///
 /// Generate a KeyPackage.
 ///
-pub fn generate_key_package(
+pub fn mls_generate_key_package(
     state: &PlatformState,
     myself: SigningIdentity,
     group_config: Option<GroupConfig>,
@@ -230,40 +230,43 @@ pub fn mls_group_create(
 ///
 /// Group management: Adding a user.
 ///
-
 pub fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
     group_config: Option<GroupConfig>,
-    user: Vec<MlsMessage>,
+    new_members: Vec<MlsMessage>,
     myself: SigningIdentity,
 ) -> Result<(MlsMessage, MlsMessage), MlsError> {
     // Get the group from the state
     let client = pstate.client(myself, group_config)?;
     let mut group = client.load_group(gid)?;
 
-    let mut commit = user
+    let mut commit = new_members
         .into_iter()
         .try_fold(group.commit_builder(), |commit_builder, user| {
             commit_builder.add_member(user)
         })?
         .build()?;
 
+    // We use the default mode which returns only one welcome message
     let welcome = commit.welcome_messages.remove(0);
     let commit = commit.commit_message;
 
+    // Write the group to the storage
     group.write_to_storage()?;
 
     Ok((commit, welcome))
 }
 
-// pub fn mls_group_propose_add(
-//     gid: GroupId,
-//     user: KeyPackage,
-//     my_identity: SigningIdentity,
-// ) -> Result<MlsMessage, MlsError> {
-//     unimplemented!()
-// }
+pub fn mls_group_propose_add(
+    _pstate: &mut PlatformState,
+    _gid: &GroupId,
+    _group_config: Option<GroupConfig>,
+    _new_members: Vec<MlsMessage>,
+    _myself: SigningIdentity,
+) -> Result<MlsMessage, MlsError> {
+    unimplemented!()
+}
 
 ///
 /// Group management: Removing a user.
@@ -274,7 +277,7 @@ pub fn mls_group_remove(
     group_config: Option<GroupConfig>,
     removed: SigningIdentity,
     myself: SigningIdentity,
-) -> Result<mls_rs::MlsMessage, MlsError> {
+) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
     // TODO introduce custom error type for this lib
@@ -295,7 +298,7 @@ pub fn mls_group_propose_remove(
     group_config: Option<GroupConfig>,
     removed: SigningIdentity,
     myself: SigningIdentity,
-) -> Result<mls_rs::MlsMessage, MlsError> {
+) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
     // TODO introduce custom error type for this lib

@@ -35,7 +35,7 @@ fn main() -> Result<(), MlsError> {
     .unwrap();
 
     // Create key package for Bob
-    let bob_kp = mls_platform_api::generate_key_package(
+    let bob_kp = mls_platform_api::mls_generate_key_package(
         &state_bob,
         bob_signing_id.clone(),
         Some(group_config.clone()),
