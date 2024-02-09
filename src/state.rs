@@ -169,8 +169,8 @@ impl PlatformState {
         SqLiteDataStorageEngine::new(cipher_conn).unwrap()
     }
 
-    pub fn delete(self) -> Result<(), std::io::Error> {
-        let path = Path::new(&self.db_path);
+    pub fn delete(db_path: String) -> Result<(), std::io::Error> {
+        let path = Path::new(&db_path);
 
         if path.exists() {
             std::fs::remove_file(path)?;

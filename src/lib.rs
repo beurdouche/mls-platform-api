@@ -31,8 +31,15 @@ impl From<mls_rs::error::MlsError> for MlsError {
 ///
 /// Generate a PlatformState.
 ///
-pub fn create_state(db_path: String) -> PlatformState {
+pub fn state(db_path: String) -> PlatformState {
     PlatformState::new(db_path).unwrap()
+}
+
+///
+/// Delete a PlatformState.
+///
+pub fn state_delete(db_path: String) -> Result<(), std::io::Error> {
+    PlatformState::delete(db_path)
 }
 
 // Definition of the GroupContext Extensions
