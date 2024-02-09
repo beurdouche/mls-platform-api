@@ -17,9 +17,18 @@ pub use mls_rs::MlsMessage;
 pub use mls_rs::ProtocolVersion;
 
 // Import some mls_rs types
-use mls_rs::crypto::SignaturePublicKey;
-use mls_rs::crypto::SignatureSecretKey;
 use mls_rs::identity::basic::BasicCredential;
+
+// Define new types
+pub type GroupId = Vec<u8>;
+pub type GroupState = Vec<u8>;
+#[derive(Clone, Debug)]
+pub struct Identity(Vec<u8>);
+
+pub enum MlsMessageOrAck {
+    Ack,
+    MlsMessage(MlsMessage),
+}
 
 ///
 /// Errors
@@ -76,25 +85,18 @@ impl Default for GroupConfig {
 }
 
 ///
-/// Generate Signature Key Pair
+/// Helper functions for SigningIdentity
 ///
-
-#[derive(Debug)]
-pub struct SignatureKeypair {
-    pub secret: SignatureSecretKey,
-    pub public: SignaturePublicKey,
-}
-
 pub fn serialize_signing_identity(
     signing_identity: &SigningIdentity,
 ) -> Result<Vec<u8>, mls_rs::mls_rs_codec::Error> {
-    Ok(signing_identity.mls_encode_to_vec()?)
+    signing_identity.mls_encode_to_vec()
 }
 
 pub fn deserialize_signing_identity(
     bytes: &[u8],
 ) -> Result<SigningIdentity, mls_rs::mls_rs_codec::Error> {
-    Ok(SigningIdentity::mls_decode(&mut bytes.as_ref())?)
+    SigningIdentity::mls_decode(&mut bytes.as_ref())
 }
 
 ///
@@ -154,10 +156,6 @@ pub fn generate_key_package(
 ///
 /// Get group members.
 ///
-#[derive(Clone, Debug)]
-pub struct Identity(Vec<u8>); // "google.com@groupId@clientId" <-> SigningIdentity
-pub struct Epoch {} // u64?
-
 pub fn mls_members(
     state: &PlatformState,
     myself: SigningIdentity,
@@ -177,17 +175,25 @@ pub fn mls_members(
     Ok((epoch, members))
 }
 
-/// To create a group for one person.
 ///
-/// Note: the groupState is kept track of by the lib and is not returned to the app.
-/// If at some point the app needs to get the MlsState, we'll support a getMlsState(GroupId) function.
+/// Get the Identity from a SigningIdentity.
 ///
-/// Note: this function underneath will write down the GroupState in its persistent storage.
-/// https://github.com/awslabs/mls-rs/blob/main/mls-rs-provider-sqlite/src/connection_strategy.rs
-pub type GroupId = Vec<u8>;
-pub type GroupState = Vec<u8>;
+pub fn mls_identity(
+    signing_identity: &SigningIdentity,
+    cs: CipherSuite,
+) -> Result<Identity, MlsError> {
+    DefaultCryptoProvider::default()
+        .cipher_suite_provider(cs)
+        .ok_or(MlsError::UnsupportedCiphersuite)?
+        .hash(&signing_identity.mls_encode_to_vec()?)
+        .map(Identity)
+        .map_err(|_| MlsError::IdentityError)
+}
 
-pub fn mls_create_group(
+///
+/// Group management: Create a Group
+///
+pub fn mls_group_create(
     pstate: &mut PlatformState,
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
@@ -224,16 +230,7 @@ pub fn mls_create_group(
 ///
 /// Group management: Adding a user.
 ///
-/// Two cases depending on access control from the app:
-///
-/// Case 1: the proposer can commit.
-/// Case 2: the proposer cannot commit, they can only propose.
-///
-/// The application should be able to decide this based on their access control
-/// either on client side or server side (eg the user X doesn't have permission
-/// to approve add requests to a groupID).
 
-// TODO: This should not be "add user" but maybe "group add" instead.
 pub fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
@@ -271,7 +268,7 @@ pub fn mls_group_add(
 ///
 /// Group management: Removing a user.
 ///
-pub fn mls_rem_member(
+pub fn mls_group_remove(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
@@ -292,7 +289,7 @@ pub fn mls_rem_member(
     Ok(commit.commit_message)
 }
 
-pub fn mls_propose_rem_user(
+pub fn mls_group_propose_remove(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
@@ -335,6 +332,75 @@ pub fn mls_update(
 }
 
 ///
+/// Process Welcome message.
+///
+
+pub fn mls_group_join(
+    pstate: &PlatformState,
+    myself: SigningIdentity,
+    group_config: Option<GroupConfig>,
+    welcome: MlsMessage,
+    ratchet_tree: Option<ExportedTree<'static>>,
+) -> Result<(), MlsError> {
+    let client = pstate.client(myself, group_config)?;
+    let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
+    group.write_to_storage()?;
+
+    Ok(())
+}
+
+///
+/// Leave a group.
+///
+pub fn mls_group_propose_leave(
+    pstate: PlatformState,
+    gid: GroupId,
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let self_index = group.current_member_index();
+    let proposal = group.propose_remove(self_index, vec![])?;
+
+    Ok(proposal)
+}
+
+///
+/// Close a group by removing all members.
+///
+
+// TODO would this be better with a custom proposal? <- Yes.
+pub fn mls_group_close(
+    pstate: PlatformState,
+    gid: GroupId,
+    group_config: Option<GroupConfig>,
+    myself: SigningIdentity,
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    // Remove everyone from the group.
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let self_index = group.current_member_index();
+
+    let all_but_me = group
+        .roster()
+        .members_iter()
+        .filter_map(|m| (m.index != self_index).then_some(m.index))
+        .collect::<Vec<_>>();
+
+    let commit = all_but_me
+        .into_iter()
+        .try_fold(group.commit_builder(), |builder, index| {
+            builder.remove_member(index)
+        })?
+        .build()?;
+
+    // TODO we should delete state when we receive an ACK. but it's not super clear how to
+    // determine on receive that this was a "close" commit. Would be easier if we had a custom
+    // proposal
+
+    Ok(commit.commit_message)
+}
+
+///
 /// Process a non-Welcome message from the app.
 ///
 /// Note: when the higher level APIs (e.g., Java in case of Android) receives a message,
@@ -347,12 +413,7 @@ pub fn mls_update(
 ///  - An application message will result in it being decrypted.
 ///
 
-pub enum MlsMessageOrAck {
-    Ack,
-    MlsMessage(MlsMessage),
-}
-
-pub fn mls_receive_message(
+pub fn mls_receive(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: SigningIdentity,
@@ -369,24 +430,6 @@ pub fn mls_receive_message(
     group.write_to_storage()?;
 
     Ok(out?)
-}
-
-///
-/// Process Welcome message.
-///
-
-pub fn mls_group_join(
-    pstate: &PlatformState,
-    myself: SigningIdentity,
-    group_config: Option<GroupConfig>,
-    welcome: MlsMessage,
-    ratchet_tree: Option<ExportedTree<'static>>,
-) -> Result<(), MlsError> {
-    let client = pstate.client(myself, group_config)?;
-    let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
-    group.write_to_storage()?;
-
-    Ok(())
 }
 
 ///
@@ -427,57 +470,6 @@ pub fn mls_send_groupcontextextension(
     Ok(commit.commit_message)
 }
 
-///
-/// Leave a group.
-///
-pub fn mls_propose_leave(
-    pstate: PlatformState,
-    gid: GroupId,
-    group_config: Option<GroupConfig>,
-    myself: SigningIdentity,
-) -> Result<mls_rs::MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
-    let self_index = group.current_member_index();
-    let proposal = group.propose_remove(self_index, vec![])?;
-
-    Ok(proposal)
-}
-
-///
-/// Close a group by removing all members.
-///
-
-// TODO would this be better with a custom proposal? <- Yes.
-pub fn mls_close(
-    pstate: PlatformState,
-    gid: GroupId,
-    group_config: Option<GroupConfig>,
-    myself: SigningIdentity,
-) -> Result<mls_rs::MlsMessage, MlsError> {
-    // Remove everyone from the group.
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
-    let self_index = group.current_member_index();
-
-    let all_but_me = group
-        .roster()
-        .members_iter()
-        .filter_map(|m| (m.index != self_index).then_some(m.index))
-        .collect::<Vec<_>>();
-
-    let commit = all_but_me
-        .into_iter()
-        .try_fold(group.commit_builder(), |builder, index| {
-            builder.remove_member(index)
-        })?
-        .build()?;
-
-    // TODO we should delete state when we receive an ACK. but it's not super clear how to
-    // determine on receive that this was a "close" commit. Would be easier if we had a custom
-    // proposal
-
-    Ok(commit.commit_message)
-}
-
 //
 // Encrypt a message.
 //
@@ -514,21 +506,6 @@ pub fn mls_export(
     let group = pstate.client(myself, group_config)?.load_group(gid)?;
     let secret = group.export_secret(label, context, len)?.to_vec();
 
-    // TODO what is the second tuple element?
+    // TODO what is the second tuple element? <- Epoch number
     Ok((secret, 0))
-}
-
-///
-/// Retrive the Identity from a SigningIdentity.
-///
-pub fn mls_identity(
-    signing_identity: &SigningIdentity,
-    cs: CipherSuite,
-) -> Result<Identity, MlsError> {
-    DefaultCryptoProvider::default()
-        .cipher_suite_provider(cs)
-        .ok_or(MlsError::UnsupportedCiphersuite)?
-        .hash(&signing_identity.mls_encode_to_vec()?)
-        .map(Identity)
-        .map_err(|_| MlsError::IdentityError)
 }
