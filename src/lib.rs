@@ -239,14 +239,13 @@ pub fn mls_stateless_generate_key_package(
 
     let client = state.client(myself, group_config)?;
     let key_package = client.generate_key_package_message()?;
-    let key_package_bytes = key_package.to_bytes()?;
 
     let mut state = state.key_packages.lock().unwrap();
     let key = state.keys().next().unwrap().clone();
 
     let key_package_data = state.remove(&key).unwrap();
 
-    Ok((key_package_bytes, key_package_data.key_package_data))
+    Ok((key_package, key_package_data.key_package_data))
 }
 
 // Add rng: Option<[u8; 32]>
@@ -464,7 +463,7 @@ pub fn mls_update(
 
     group.write_to_storage()?;
 
-    Ok(commit.commit_message.to_bytes()?)
+    Ok(commit.commit_message)
 }
 
 ///
