@@ -481,7 +481,7 @@ pub fn mls_send_groupcontextextension(
 // Encrypt a message.
 //
 
-pub fn mls_encrypt(
+pub fn mls_send(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: SigningIdentity,

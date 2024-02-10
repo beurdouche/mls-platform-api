@@ -86,7 +86,7 @@ fn main() -> Result<(), MlsError> {
     .unwrap();
 
     // Bob sends message to alice
-    let ciphertext = mls_platform_api::mls_encrypt(
+    let ciphertext = mls_platform_api::mls_send(
         &state_bob,
         &gid,
         bob_signing_id,
