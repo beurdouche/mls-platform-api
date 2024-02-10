@@ -427,6 +427,7 @@ pub fn mls_receive(
     message_or_ack: MlsMessageOrAck,
     group_config: Option<GroupConfig>,
 ) -> Result<ReceivedMessage, MlsError> {
+    // TODO: Do we need the GID as input since it is in the message framing ?
     let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
 
     let out = match message_or_ack {
@@ -434,6 +435,7 @@ pub fn mls_receive(
         MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message),
     };
 
+    // Write the state to storage
     group.write_to_storage()?;
 
     Ok(out?)
