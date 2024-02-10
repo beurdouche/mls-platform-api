@@ -344,12 +344,16 @@ pub fn mls_group_join(
     group_config: Option<GroupConfig>,
     welcome: MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
-) -> Result<(), MlsError> {
+) -> Result<Vec<u8>, MlsError> {
     let client = pstate.client(myself, group_config)?;
     let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
+    let gid = group.group_id().to_vec();
+
+    // Store the state
     group.write_to_storage()?;
 
-    Ok(())
+    // Return the group identifier
+    Ok(gid)
 }
 
 ///
