@@ -1,16 +1,5 @@
-[package]
-name = "mls-platform-api"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-mls-rs = { version = "0.38.0", features = ["sqlcipher-bundled"] }
-mls-rs-crypto-rustcrypto = "0.9.0"
-mls-rs-provider-sqlite = "0.10.0"
-hex = { version = "0.4", features = ["serde"] }
-serde = { version = "1.0", features = ["alloc", "derive", "rc"] }
-bincode = "1.3"
-sha2 = "0.10.8"
-thiserror = "1"
+[workspace]
+resolver = "2"
+members = [
+  "mls-platform-api",
+]
