@@ -1,0 +1,18 @@
+[package]
+name = "mls-lite"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "mls_lite"
+
+[features]
+default = ["uniffi"]
+uniffi = ["dep:uniffi", "mls-rs/uniffi", "mls-rs-core/uniffi"]
+
+[dependencies]
+mls-rs = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+mls-rs-core = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+mls-rs-crypto-openssl = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+uniffi = { git = "https://github.com/mgeisler/uniffi-rs", branch = "uniffi", optional = true }
