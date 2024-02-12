@@ -2,6 +2,6 @@
 resolver = "2"
 members = [
   "mls-platform-api",
-  # "mls-lite",
-  # "uniffi-bindgen",
+  "mls-lite",
+  "uniffi-bindgen",
 ]
