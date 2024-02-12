@@ -25,6 +25,7 @@ pub type GroupState = Vec<u8>;
 #[derive(Clone, Debug)]
 pub struct Identity(Vec<u8>);
 
+#[allow(clippy::large_enum_variant)]
 pub enum MlsMessageOrAck {
     Ack,
     MlsMessage(MlsMessage),
@@ -41,6 +42,22 @@ pub enum MlsError {
     IdentityError,
     #[error("UnsupportedCiphersuite")]
     UnsupportedCiphersuite,
+    #[error("UnsupportedGroupConfig")]
+    UnsupportedGroupConfig,
+    #[error("UndefinedSigningIdentity")]
+    UndefinedSigningIdentity,
+    #[error("EncodingError")]
+    EncodingError,
+    #[error("SerializationError")]
+    SerializationError,
+    #[error("DeserializationError")]
+    DeserializationError,
+    #[error("StorageError")]
+    StorageError,
+    #[error("UnavailableSecret")]
+    UnavailableSecret,
+    #[error("MutexError")]
+    MutexError,
     #[error(transparent)]
     MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
 }
@@ -48,14 +65,14 @@ pub enum MlsError {
 ///
 /// Generate or Retrieve a PlatformState.
 ///
-pub fn state(db_path: String, db_key: [u8; 32]) -> PlatformState {
-    PlatformState::new(db_path, db_key).unwrap()
+pub fn state(db_path: String, db_key: [u8; 32]) -> Result<PlatformState, MlsError> {
+    PlatformState::new(db_path, db_key)
 }
 
 ///
 /// Delete a PlatformState.
 ///
-pub fn state_delete(db_path: String) -> Result<(), std::io::Error> {
+pub fn state_delete(db_path: String) -> Result<(), MlsError> {
     PlatformState::delete(db_path)
 }
 
@@ -96,7 +113,7 @@ pub fn serialize_signing_identity(
 pub fn deserialize_signing_identity(
     bytes: &[u8],
 ) -> Result<SigningIdentity, mls_rs::mls_rs_codec::Error> {
-    SigningIdentity::mls_decode(&mut bytes.as_ref())
+    SigningIdentity::mls_decode(&mut &*bytes)
 }
 
 ///
@@ -117,10 +134,14 @@ pub fn mls_generate_signature_keypair(
     _randomness: Option<Vec<u8>>,
 ) -> Result<SigningIdentity, MlsError> {
     let crypto_provider = DefaultCryptoProvider::default();
-    let cipher_suite = crypto_provider.cipher_suite_provider(cs).unwrap();
+    let cipher_suite = crypto_provider
+        .cipher_suite_provider(cs)
+        .ok_or(MlsError::UnsupportedCiphersuite)?;
 
     // Generate a signature key pair.
-    let (signature_key, signature_pubkey) = cipher_suite.signature_key_generate().unwrap();
+    let (signature_key, signature_pubkey) = cipher_suite
+        .signature_key_generate()
+        .map_err(|_| MlsError::UnsupportedCiphersuite)?;
 
     // Create the credential and the signing identity.
     // TODO: Handle X.509 certificates
@@ -132,7 +153,7 @@ pub fn mls_generate_signature_keypair(
     println!("Signature Secret Key: {:?}", hex::encode(&signature_key));
 
     // Store the signature key pair.
-    state.insert_sigkey(&signing_identity, &signature_key, cs);
+    let _ = state.insert_sigkey(&signing_identity, &signature_key, cs);
     Ok(signing_identity)
 }
 
@@ -162,7 +183,10 @@ pub fn mls_members(
     group_config: Option<GroupConfig>,
     gid: &GroupId,
 ) -> Result<(u64, Vec<(Identity, SigningIdentity)>), MlsError> {
-    let cs = group_config.as_ref().unwrap().ciphersuite;
+    let gc = group_config
+        .clone()
+        .ok_or(MlsError::UnsupportedGroupConfig)?;
+    let cs = gc.ciphersuite;
     let group = state.client(myself, group_config)?.load_group(gid)?;
     let epoch = group.current_epoch();
 
@@ -280,12 +304,11 @@ pub fn mls_group_remove(
 ) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
-    // TODO introduce custom error type for this lib
     let removed = group
         .roster()
         .members_iter()
         .find_map(|m| (m.signing_identity == removed).then_some(m.index))
-        .unwrap();
+        .ok_or(MlsError::UndefinedSigningIdentity)?;
 
     let commit = group.commit_builder().remove_member(removed)?.build()?;
 
@@ -301,12 +324,11 @@ pub fn mls_group_propose_remove(
 ) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
-    // TODO introduce custom error type for this lib
     let removed = group
         .roster()
         .members_iter()
         .find_map(|m| (m.signing_identity == removed).then_some(m.index))
-        .unwrap();
+        .ok_or(MlsError::UndefinedSigningIdentity)?;
 
     let proposal = group.propose_remove(removed, vec![])?;
 
