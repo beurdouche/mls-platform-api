@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Rust Program",
+            "program": "${workspaceFolder}/target/debug/mls-platform-api",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "sourceMap": {
+                "/rustc/hash": "${env:HOME}/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust"
+            },
+            "preLaunchTask": "cargo build",
+            "sourceLanguages": ["rust"]
+        }
+    ]
+}
