@@ -184,6 +184,7 @@ pub fn mls_members(
     group_config: Option<GroupConfig>,
     gid: &GroupId,
 ) -> Result<(u64, Vec<(Identity, SigningIdentity)>), MlsError> {
+    // TODO: This shouldn't rely on the SigningIdentity
     let gc = group_config
         .clone()
         .ok_or(MlsError::UnsupportedGroupConfig)?;
@@ -382,6 +383,7 @@ pub fn mls_group_join(
 ///
 /// Leave a group.
 ///
+// TODO: Do we keep this ?
 pub fn mls_group_propose_leave(
     pstate: PlatformState,
     gid: GroupId,
@@ -449,7 +451,7 @@ pub fn mls_receive(
     myself: SigningIdentity,
     message_or_ack: MlsMessageOrAck,
     group_config: Option<GroupConfig>,
-) -> Result<ReceivedMessage, MlsError> {
+) -> Result<Vec<u8>, MlsError> {
     // TODO: Do we need the GID as input since it is in the message framing ?
     let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
 
@@ -458,10 +460,19 @@ pub fn mls_receive(
         MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message),
     };
 
+    //
+    let result = match out? {
+        ReceivedMessage::ApplicationMessage(app_data_description) => {
+            app_data_description.data().to_vec()
+        }
+        // TODO: Return the serialized message if not an application message
+        _ => "Not an Application Message".as_bytes().to_vec(),
+    };
+
     // Write the state to storage
     group.write_to_storage()?;
 
-    Ok(out?)
+    Ok(result)
 }
 
 ///
