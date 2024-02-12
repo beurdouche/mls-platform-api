@@ -1,5 +1,6 @@
 mod state;
 
+use mls_rs::error::{AnyError, IntoAnyError};
 use mls_rs::group::proposal::{CustomProposal, ProposalType};
 use mls_rs::group::{ExportedTree, ReceivedMessage};
 use mls_rs::identity::SigningIdentity;
@@ -39,27 +40,27 @@ pub enum MlsError {
     #[error(transparent)]
     MlsError(#[from] mls_rs::error::MlsError),
     #[error("IdentityError")]
-    IdentityError,
+    IdentityError(AnyError),
+    #[error("CryptoError")]
+    CryptoError(AnyError),
     #[error("UnsupportedCiphersuite")]
     UnsupportedCiphersuite,
     #[error("UnsupportedGroupConfig")]
     UnsupportedGroupConfig,
     #[error("UndefinedSigningIdentity")]
     UndefinedSigningIdentity,
-    #[error("EncodingError")]
-    EncodingError,
-    #[error("SerializationError")]
-    SerializationError,
-    #[error("DeserializationError")]
-    DeserializationError,
     #[error("StorageError")]
-    StorageError,
+    StorageError(AnyError),
     #[error("UnavailableSecret")]
     UnavailableSecret,
     #[error("MutexError")]
     MutexError,
     #[error(transparent)]
     MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
+    #[error(transparent)]
+    BincodeError(#[from] bincode::Error),
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
 }
 
 ///
@@ -211,7 +212,7 @@ pub fn mls_identity(
         .ok_or(MlsError::UnsupportedCiphersuite)?
         .hash(&signing_identity.mls_encode_to_vec()?)
         .map(Identity)
-        .map_err(|_| MlsError::IdentityError)
+        .map_err(|e| MlsError::IdentityError(e.into_any_error()))
 }
 
 ///

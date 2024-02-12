@@ -7,6 +7,7 @@ use std::{
 use mls_rs::{
     client_builder::MlsConfig,
     crypto::SignatureSecretKey,
+    error::IntoAnyError,
     identity::SigningIdentity,
     mls_rs_codec::{MlsDecode, MlsEncode},
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
@@ -94,7 +95,7 @@ impl PlatformState {
         state
             .get_sqlite_engine()?
             .application_data_storage()
-            .map_err(|_| (MlsError::StorageError))?;
+            .map_err(|e| (MlsError::StorageError(e.into_any_error())))?;
 
         Ok(state)
     }
@@ -115,7 +116,7 @@ impl PlatformState {
         let engine = self.get_sqlite_engine()?;
 
         let mut builder = mls_rs::client_builder::ClientBuilder::new_sqlite(engine)
-            .map_err(|_| MlsError::StorageError)?
+            .map_err(|e| MlsError::StorageError(e.into_any_error()))?
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
             .signing_identity(
@@ -144,40 +145,32 @@ impl PlatformState {
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself.mls_encode_to_vec()?;
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
-            .map_err(|_| MlsError::StorageError)?;
-        let data = bincode::serialize(&signature_data).map_err(|_| MlsError::SerializationError)?;
+            .map_err(|e| MlsError::StorageError(e.into_any_error()))?;
+        let data = bincode::serialize(&signature_data)?;
         storage
             .insert(hex::encode(key), data)
-            .map_err(|_| MlsError::StorageError)?;
+            .map_err(|e| MlsError::StorageError(e.into_any_error()))?;
         Ok(())
     }
 
     pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<Option<SignatureData>, MlsError> {
         // TODO: Not clear if the option is needed here, the underlying function needs it.
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself.mls_encode_to_vec()?;
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
-            .map_err(|_| MlsError::StorageError)?;
+            .map_err(|e| MlsError::StorageError(e.into_any_error()))?;
 
         storage
             .get(&hex::encode(key))
-            .map_err(|_| MlsError::StorageError)?
+            .map_err(|e| MlsError::StorageError(e.into_any_error()))?
             .map_or_else(
                 || Ok(None),
-                |data| {
-                    bincode::deserialize(&data)
-                        .map(Some)
-                        .map_err(|_| MlsError::DeserializationError)
-                },
+                |data| bincode::deserialize(&data).map(Some).map_err(Into::into),
             )
     }
 
@@ -190,14 +183,15 @@ impl PlatformState {
         let cipher_config = SqlCipherConfig::new(SqlCipherKey::RawKey(self.db_key));
         let cipher_conn = CipheredConnectionStrategy::new(file_conn, cipher_config);
 
-        SqLiteDataStorageEngine::new(cipher_conn).map_err(|_| MlsError::StorageError)
+        SqLiteDataStorageEngine::new(cipher_conn)
+            .map_err(|e| MlsError::StorageError(e.into_any_error()))
     }
 
     pub fn delete(db_path: String) -> Result<(), MlsError> {
         let path = Path::new(&db_path);
 
         if path.exists() {
-            std::fs::remove_file(path).map_err(|_| MlsError::StorageError)?;
+            std::fs::remove_file(path)?;
         }
 
         Ok(())
@@ -210,11 +204,11 @@ impl TemporaryState {
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, MlsError> {
-        bincode::serialize(self).map_err(|_| MlsError::SerializationError)
+        bincode::serialize(self).map_err(Into::into)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, MlsError> {
-        bincode::deserialize(bytes).map_err(|_| MlsError::SerializationError)
+        bincode::deserialize(bytes).map_err(Into::into)
     }
 
     pub fn client(
@@ -256,9 +250,7 @@ impl TemporaryState {
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself.mls_encode_to_vec()?;
 
         self.sigkeys.insert(key, signature_data);
         // TODO: We could return the value to indicate if the key
@@ -267,9 +259,7 @@ impl TemporaryState {
     }
 
     pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<SignatureData, MlsError> {
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself.mls_encode_to_vec()?;
 
         self.sigkeys
             .get(&key)
