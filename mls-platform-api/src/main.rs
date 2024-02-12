@@ -4,8 +4,8 @@ use mls_platform_api::MlsMessageOrAck;
 fn main() -> Result<(), MlsError> {
     let group_config = mls_platform_api::GroupConfig::default();
 
-    let mut state_alice = mls_platform_api::state("sqlite/alice".into(), [0u8; 32])?;
-    let mut state_bob = mls_platform_api::state("sqlite/bob".into(), [0u8; 32])?;
+    let mut state_alice = mls_platform_api::state("alice".into(), [0u8; 32])?;
+    let mut state_bob = mls_platform_api::state("bob".into(), [0u8; 32])?;
 
     // Create signature keypairs
     let alice_signing_id = mls_platform_api::mls_generate_signature_keypair(
