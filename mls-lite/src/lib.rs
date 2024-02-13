@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use mls_rs::client_builder::{BaseConfig, WithCryptoProvider, WithIdentityProvider};
 use mls_rs::error::{IntoAnyError, MlsError};
@@ -31,8 +31,8 @@ fn arc_unwrap_or_clone<T: Clone>(arc: Arc<T>) -> T {
 
 /// A ([`mls_rs::crypto::SignaturePublicKey`],
 /// [`mls_rs::crypto::SignatureSecretKey`]) pair.
-#[derive(Debug)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Clone, Debug)]
 pub struct SignatureKeypair {
     public_key: Arc<mls_rs::crypto::SignaturePublicKey>,
     secret_key: Arc<mls_rs::crypto::SignatureSecretKey>,
@@ -43,19 +43,26 @@ pub type LiteConfig = WithIdentityProvider<
     WithCryptoProvider<OpensslCryptoProvider, BaseConfig>,
 >;
 
-/// Light-weight wrapper around a [`mls_rs::group::NewMemberInfo`].
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
-pub struct LiteNewMemberInfo {
-    inner: mls_rs::group::NewMemberInfo,
+/// Light-weight wrapper around a [`mls_rs::Group`] and a  [`mls_rs::group::NewMemberInfo`].
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+#[derive(Clone)]
+pub struct LiteJoinInfo {
+    /// The group that was joined.
+    group: Arc<LiteGroup>,
+    /// Group info extensions found within the Welcome message used to join
+    /// the group.
+    pub group_info_extensions: Arc<mls_rs::ExtensionList>,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
 pub struct LiteKeyPackage {
     inner: mls_rs::KeyPackage,
 }
 
 /// Light-weight wrapper around a [`mls_rs::MlsMessage`].
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
 pub struct LiteMessage {
     inner: mls_rs::MlsMessage,
 }
@@ -98,10 +105,12 @@ pub fn generate_signature_keypair(
 ///
 /// See [`mls_rs::Client`] for details.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
 pub struct LiteClient {
     inner: mls_rs::client::Client<LiteConfig>,
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl LiteClient {
     /// Create a new client.
     ///
@@ -155,23 +164,26 @@ impl LiteClient {
             Some(group_id) => self.inner.create_group_with_id(group_id, extensions)?,
             None => self.inner.create_group(extensions)?,
         };
-        Ok(LiteGroup { inner })
+        Ok(LiteGroup {
+            inner: Arc::new(Mutex::new(inner)),
+        })
     }
 
     /// Join an existing group.
     ///
     /// See [`mls_rs::Client::join_group`] for details.
-    pub fn join_group(
-        &self,
-        welcome_message: mls_rs::MlsMessage,
-    ) -> Result<(LiteGroup, LiteNewMemberInfo), MlsError> {
-        let (group, new_member_info) = self.inner.join_group(None, welcome_message)?;
-        Ok((
-            LiteGroup { inner: group },
-            LiteNewMemberInfo {
-                inner: new_member_info,
-            },
-        ))
+    pub fn join_group(&self, welcome_message: Arc<LiteMessage>) -> Result<LiteJoinInfo, MlsError> {
+        let welcome_message = arc_unwrap_or_clone(welcome_message);
+        let (group, new_member_info) = self.inner.join_group(None, welcome_message.inner)?;
+
+        let group = Arc::new(LiteGroup {
+            inner: Arc::new(Mutex::new(group)),
+        });
+        let group_info_extensions = Arc::new(new_member_info.group_info_extensions);
+        Ok(LiteJoinInfo {
+            group,
+            group_info_extensions,
+        })
     }
 }
 
@@ -181,34 +193,43 @@ impl LiteClient {
 /// add/remove users.
 ///
 /// See [`mls_rs::Group`] for details.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone)]
 pub struct LiteGroup {
-    inner: mls_rs::Group<LiteConfig>,
+    inner: Arc<Mutex<mls_rs::Group<LiteConfig>>>,
 }
 
 impl LiteGroup {
-    /// Extract the basic credential identifier from a key package.
-    fn key_package_into_identifier(message: mls_rs::MlsMessage) -> Result<Vec<u8>, MlsError> {
-        let key_package = message
-            .into_key_package()
-            .ok_or(MlsError::UnexpectedMessageType)?;
-        let signing_identity = key_package.signing_identity();
-        let Credential::Basic(credential) = &signing_identity.credential else {
-            return Err(MlsError::RequiredCredentialNotFound(
-                BasicCredential::credential_type(),
-            ));
-        };
-
-        Ok(credential.identifier.clone())
+    fn inner(&self) -> std::sync::MutexGuard<'_, mls_rs::Group<LiteConfig>> {
+        self.inner.lock().unwrap()
     }
+}
 
+/// Extract the basic credential identifier from a key package.
+fn key_package_into_identifier(message: mls_rs::MlsMessage) -> Result<Vec<u8>, MlsError> {
+    let key_package = message
+        .into_key_package()
+        .ok_or(MlsError::UnexpectedMessageType)?;
+    let signing_identity = key_package.signing_identity();
+    let Credential::Basic(credential) = &signing_identity.credential else {
+        return Err(MlsError::RequiredCredentialNotFound(
+            BasicCredential::credential_type(),
+        ));
+    };
+
+    Ok(credential.identifier.clone())
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl LiteGroup {
     /// Perform a commit of received proposals (or an empty commit).
     ///
     /// TODO: ensure `path_required` is always set in
     /// [`MlsRules::commit_options`](`mls_rs::MlsRules::commit_options`).
     ///
     /// See [`mls_rs::Group::commit`] for details.
-    pub fn commit(&mut self) -> Result<mls_rs::group::CommitOutput, MlsError> {
-        self.inner.commit(Vec::new())
+    pub fn commit(&self) -> Result<mls_rs::group::CommitOutput, MlsError> {
+        self.inner().commit(Vec::new())
     }
 
     /// Commit the addition of a member.
@@ -218,10 +239,11 @@ impl LiteGroup {
     ///
     /// See [`mls_rs::group::CommitBuilder::add_member`] for details.
     pub fn add_member(
-        &mut self,
-        member: LiteMessage,
+        &self,
+        member: Arc<LiteMessage>,
     ) -> Result<mls_rs::group::CommitOutput, MlsError> {
-        self.inner
+        let member = arc_unwrap_or_clone(member);
+        self.inner()
             .commit_builder()
             .add_member(member.inner)?
             .build()
@@ -233,8 +255,10 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::Group::propose_add`] for details.
-    pub fn propose_add_member(&mut self, member: LiteMessage) -> Result<LiteMessage, MlsError> {
-        let inner = self.inner.propose_add(member.inner, Vec::new())?;
+    pub fn propose_add_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, MlsError> {
+        let member = arc_unwrap_or_clone(member);
+        let mut group = self.inner();
+        let inner = group.propose_add(member.inner, Vec::new())?;
         Ok(LiteMessage { inner })
     }
 
@@ -244,15 +268,14 @@ impl LiteGroup {
     ///
     /// See [`mls_rs::group::CommitBuilder::remove_member`] for details.
     pub fn remove_member(
-        &mut self,
-        member: LiteMessage,
+        &self,
+        member: Arc<LiteMessage>,
     ) -> Result<mls_rs::group::CommitOutput, MlsError> {
-        let identifier = LiteGroup::key_package_into_identifier(member.inner)?;
-        let member = self.inner.member_with_identity(&identifier)?;
-        self.inner
-            .commit_builder()
-            .remove_member(member.index)?
-            .build()
+        let member = arc_unwrap_or_clone(member);
+        let identifier = key_package_into_identifier(member.inner)?;
+        let mut group = self.inner();
+        let member = group.member_with_identity(&identifier)?;
+        group.commit_builder().remove_member(member.index)?.build()
     }
 
     /// Propose to remove a member from this group.
@@ -261,27 +284,20 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::group::Group::propose_remove`] for details.
-    pub fn propose_remove_member(&mut self, member: LiteMessage) -> Result<LiteMessage, MlsError> {
-        let identifier = LiteGroup::key_package_into_identifier(member.inner)?;
-        let member = self.inner.member_with_identity(&identifier)?;
-        let inner = self.inner.propose_remove(member.index, Vec::new())?;
+    pub fn propose_remove_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, MlsError> {
+        let member = arc_unwrap_or_clone(member);
+        let identifier = key_package_into_identifier(member.inner)?;
+        let mut group = self.inner();
+        let member = group.member_with_identity(&identifier)?;
+        let inner = group.propose_remove(member.index, Vec::new())?;
         Ok(LiteMessage { inner })
     }
 
     /// Apply a pending commit.
     ///
     /// See [`mls_rs::Group::apply_pending_commit`] for details.
-    pub fn apply_pending_commit(&mut self) -> Result<(), MlsError> {
-        self.inner.apply_pending_commit()?;
+    pub fn apply_pending_commit(&self) -> Result<(), MlsError> {
+        self.inner().apply_pending_commit()?;
         Ok(())
-    }
-
-    /// Current group roster.
-    ///
-    /// This gives you access to the members of the group.
-    ///
-    /// See [`mls_rs::Group::apply_pending_commit`] for details.
-    pub fn roster(&self) -> mls_rs::group::Roster<'_> {
-        self.inner.roster()
     }
 }

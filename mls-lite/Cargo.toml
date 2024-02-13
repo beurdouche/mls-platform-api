@@ -12,7 +12,7 @@ default = ["uniffi"]
 uniffi = ["dep:uniffi", "mls-rs/uniffi", "mls-rs-core/uniffi"]
 
 [dependencies]
-mls-rs = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
-mls-rs-core = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
-mls-rs-crypto-openssl = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
-uniffi = { git = "https://github.com/mgeisler/uniffi-rs", branch = "uniffi", optional = true }
+mls-rs = "0.38"
+mls-rs-core = "0.17.1"
+mls-rs-crypto-openssl = "0.8.0"
+uniffi = { version = "0.26.0", optional = true }
