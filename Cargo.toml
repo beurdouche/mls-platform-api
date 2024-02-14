@@ -3,5 +3,6 @@ resolver = "2"
 members = [
   "mls-platform-api",
   "mls-lite",
+  "mls-lite-bis",
   "uniffi-bindgen",
 ]
