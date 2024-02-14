@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use mls_rs::client_builder::{BaseConfig, WithCryptoProvider, WithIdentityProvider};
 use mls_rs::error::{IntoAnyError, MlsError};
+use mls_rs::group::ReceivedMessage;
 use mls_rs::identity::basic::BasicIdentityProvider;
 use mls_rs::identity::Credential;
 use mls_rs::{CipherSuiteProvider, Client, CryptoProvider};
@@ -75,6 +76,42 @@ impl LiteMessage {
         self.inner.into_key_package()
     }
 }
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
+pub struct LiteProposal {
+    inner: mls_rs::group::proposal::Proposal,
+}
+
+/// Light-weight wrapper around a [`mls_rs::group::ReceivedMessage`].
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Clone, Debug)]
+pub enum LiteReceivedMessage {
+    /// A decrypted application message.
+    ApplicationMessage {
+        sender: Arc<SigningIdentity>,
+        data: Vec<u8>,
+    },
+
+    /// A new commit was processed creating a new group state.
+    Commit { committer: Arc<SigningIdentity> },
+
+    /// A proposal was received.
+    Proposal {
+        sender: Arc<SigningIdentity>,
+        proposal: Arc<LiteProposal>,
+    },
+
+    /// Validated GroupInfo object.
+    GroupInfo,
+    /// Validated welcome message.
+    Welcome,
+
+    /// Validated key package.
+    KeyPackage { key_package: Arc<LiteKeyPackage> },
+}
+
+impl LiteReceivedMessage {}
 
 /// Generate a MLS signature keypair.
 ///
@@ -203,6 +240,14 @@ impl LiteGroup {
     fn inner(&self) -> std::sync::MutexGuard<'_, mls_rs::Group<LiteConfig>> {
         self.inner.lock().unwrap()
     }
+
+    fn index_to_identity(&self, index: u32) -> Result<SigningIdentity, MlsError> {
+        let group = self.inner();
+        let member = group
+            .member_at_index(index)
+            .ok_or(MlsError::InvalidNodeIndex(index))?;
+        Ok(member.signing_identity)
+    }
 }
 
 /// Extract the basic credential identifier from a key package.
@@ -291,6 +336,53 @@ impl LiteGroup {
         let member = group.member_with_identity(&identifier)?;
         let inner = group.propose_remove(member.index, Vec::new())?;
         Ok(LiteMessage { inner })
+    }
+
+    /// Process an inbound message for this group.
+    ///
+    /// # Warning
+    ///
+    /// Changes to the group’s state as a result of processing message
+    /// will not be persisted until [`LiteGroup::write_to_storage`] is
+    /// called.
+    pub fn process_incoming_message(
+        &self,
+        message: Arc<LiteMessage>,
+    ) -> Result<LiteReceivedMessage, MlsError> {
+        let message = arc_unwrap_or_clone(message);
+        let mut group = self.inner();
+        match group.process_incoming_message(message.inner)? {
+            ReceivedMessage::ApplicationMessage(application_message) => {
+                let sender = Arc::new(self.index_to_identity(application_message.sender_index)?);
+                let data = application_message.authenticated_data;
+                Ok(LiteReceivedMessage::ApplicationMessage { sender, data })
+            }
+            ReceivedMessage::Commit(commit_message) => {
+                let committer = Arc::new(self.index_to_identity(commit_message.committer)?);
+                Ok(LiteReceivedMessage::Commit { committer })
+            }
+            ReceivedMessage::Proposal(proposal_message) => {
+                let sender = match proposal_message.sender {
+                    mls_rs::group::ProposalSender::Member(index) => {
+                        Arc::new(self.index_to_identity(index)?)
+                    }
+                    _ => todo!("External and NewMember proposal senders are not supported"),
+                };
+                let proposal = Arc::new(LiteProposal {
+                    inner: proposal_message.proposal,
+                });
+                Ok(LiteReceivedMessage::Proposal { sender, proposal })
+            }
+            // TODO: ReceivedMessage::GroupInfo does not have any
+            // public methods (unless the "ffi" Cargo feature is set).
+            // So perhaps we don't need it?
+            ReceivedMessage::GroupInfo(_) => Ok(LiteReceivedMessage::GroupInfo),
+            ReceivedMessage::Welcome => Ok(LiteReceivedMessage::Welcome),
+            ReceivedMessage::KeyPackage(inner) => {
+                let key_package = Arc::new(LiteKeyPackage { inner });
+                Ok(LiteReceivedMessage::KeyPackage { key_package })
+            }
+        }
     }
 
     /// Apply a pending commit.
