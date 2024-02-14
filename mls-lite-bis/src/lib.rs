@@ -188,89 +188,107 @@ impl LiteGroup {
         mls_platform_api::key_package_into_identifier(message)
     }
 
-    // /// Perform a commit of received proposals (or an empty commit).
-    // ///
-    // /// TODO: ensure `path_required` is always set in
-    // /// [`MlsRules::commit_options`](`mls_rs::MlsRules::commit_options`).
-    // ///
-    // /// See [`mls_rs::Group::commit`] for details.
+    /// Perform a commit of received proposals (or an empty commit).
+    ///
+    /// TODO: ensure `path_required` is always set in
+    /// [`MlsRules::commit_options`](`mls_rs::MlsRules::commit_options`).
+    ///
+    /// See [`mls_rs::Group::commit`] for details.
 
-    // /// BB. Not sure if this should be exposed at all.
-    // pub fn commit(&mut self) -> Result<mls_rs::group::CommitOutput, MlsError> {
-    //     self.inner.commit(Vec::new())
-    // }
+    /// BB. Not sure if this should be exposed at all.
+    pub fn commit(&mut self) -> Result<mls_rs::group::CommitOutput, MlsError> {
+        self.inner.commit(Vec::new())
+    }
 
-    // /// Commit the addition of a member.
-    // ///
-    // /// The member is representated by the key package in `member`.
-    // /// The result is the welcome message to send to this member.
-    // ///
-    // /// See [`mls_rs::group::CommitBuilder::add_member`] for details.
-    // pub fn add_member(
-    //     &mut self,
-    //     member: mls_platform_api::MlsMessage,
-    // ) -> Result<mls_rs::group::CommitOutput, MlsError> {
-    //     self.inner
-    //         .commit_builder()
-    //         .add_member(member.inner)?
-    //         .build()
-    // }
+    /// Commit the addition of a member.
+    ///
+    /// The member is representated by the key package in `member`.
+    /// The result is the welcome message to send to this member.
+    ///
+    /// See [`mls_rs::group::CommitBuilder::add_member`] for details.
+    pub fn add_member(
+        &mut self,
+        member: mls_platform_api::MlsMessage,
+    ) -> Result<mls_platform_api::MlsMessage, mls_platform_api::MlsError> {
+        mls_platform_api::group_add(
+            self.state,
+            self.gid,
+            self.config,
+            member,
+            self.current_identity,
+        )?
+    }
 
-    // /// Propose to add a member to this group.
-    // ///
-    // /// The member is representated by the key package in `member`.
-    // /// The result is the welcome message to send to this member.
-    // ///
-    // /// See [`mls_rs::Group::propose_add`] for details.
-    // pub fn propose_add_member(&mut self, member: LiteMessage) -> Result<LiteMessage, MlsError> {
-    //     let inner = self.inner.propose_add(member.inner, Vec::new())?;
-    //     Ok(LiteMessage { inner })
-    // }
+    /// Propose to add a member to this group.
+    ///
+    /// The member is representated by the key package in `member`.
+    /// The result is the welcome message to send to this member.
+    ///
+    /// See [`mls_rs::Group::propose_add`] for details.
+    pub fn propose_add_member(
+        &mut self,
+        member: LiteMessage,
+    ) -> Result<mls_platform_api::MlsMessage, mls_platform_api::MlsError> {
+        mls_platform_api::group_propose_add(
+            self.state,
+            self.gid,
+            self.config,
+            member,
+            self.current_identity,
+        )?
+    }
 
-    // /// Propose and commit the removal of a member.
-    // ///
-    // /// The member is representated by the key package in `member`.
-    // ///
-    // /// See [`mls_rs::group::CommitBuilder::remove_member`] for details.
-    // pub fn remove_member(
-    //     &mut self,
-    //     member: LiteMessage,
-    // ) -> Result<mls_rs::group::CommitOutput, MlsError> {
-    //     let identifier = LiteGroup::key_package_into_identifier(member.inner)?;
-    //     let member = self.inner.member_with_identity(&identifier)?;
-    //     self.inner
-    //         .commit_builder()
-    //         .remove_member(member.index)?
-    //         .build()
-    // }
+    /// Propose and commit the removal of a member.
+    ///
+    /// The member is representated by the key package in `member`.
+    ///
+    /// See [`mls_rs::group::CommitBuilder::remove_member`] for details.
+    pub fn remove_member(
+        &mut self,
+        member: SigningIdentity,
+    ) -> Result<mls_platform_api::MlsMessage, mls_platform_api::MlsError> {
+        mls_platform_api::group_remove(
+            self.state,
+            self.gid,
+            self.config,
+            member,
+            self.current_identity,
+        )?
+    }
 
-    // /// Propose to remove a member from this group.
-    // ///
-    // /// The member is representated by the key package in `member`.
-    // /// The result is the welcome message to send to this member.
-    // ///
-    // /// See [`mls_rs::group::Group::propose_remove`] for details.
-    // pub fn propose_remove_member(&mut self, member: LiteMessage) -> Result<LiteMessage, MlsError> {
-    //     let identifier = LiteGroup::key_package_into_identifier(member.inner)?;
-    //     let member = self.inner.member_with_identity(&identifier)?;
-    //     let inner = self.inner.propose_remove(member.index, Vec::new())?;
-    //     Ok(LiteMessage { inner })
-    // }
+    /// Propose to remove a member from this group.
+    ///
+    /// The member is representated by the key package in `member`.
+    /// The result is the welcome message to send to this member.
+    ///
+    /// See [`mls_rs::group::Group::propose_remove`] for details.
+    pub fn propose_remove_member(
+        &mut self,
+        member: SigningIdentity,
+    ) -> Result<mls_platform_api::MlsMessage, mls_platform_api::MlsError> {
+        mls_platform_api::group_propose_remove(
+            self.state,
+            self.gid,
+            self.config,
+            member,
+            self.current_identity,
+        )?
+    }
 
-    // /// Apply a pending commit.
-    // ///
-    // /// See [`mls_rs::Group::apply_pending_commit`] for details.
-    // pub fn apply_pending_commit(&mut self) -> Result<(), MlsError> {
-    //     self.inner.apply_pending_commit()?;
-    //     Ok(())
-    // }
+    /// Apply a pending commit.
+    ///
+    /// See [`mls_rs::Group::apply_pending_commit`] for details.
+    pub fn apply_pending_commit(&mut self) -> Result<(), MlsError> {
+        todo!();
+        Ok(())
+    }
 
-    // /// Current group roster.
-    // ///
-    // /// This gives you access to the members of the group.
-    // ///
-    // /// See [`mls_rs::Group::apply_pending_commit`] for details.
-    // pub fn roster(&self) -> mls_rs::group::Roster<'_> {
-    //     self.inner.roster()
-    // }
+    /// Current group roster.
+    ///
+    /// This gives you access to the members of the group.
+    ///
+    /// See [`mls_rs::Group::apply_pending_commit`] for details.
+    pub fn members(&self) -> mls_platform_api::Vec<SignatureIdentity> {
+        mls_platform_api::group_members(self.state, self.gid)
+    }
 }
