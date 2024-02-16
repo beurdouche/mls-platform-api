@@ -338,6 +338,13 @@ impl LiteGroup {
         Ok(LiteMessage { inner })
     }
 
+    /// Encrypt an application message using the current group state.
+    pub fn encrypt_application_message(&self, message: &[u8]) -> Result<LiteMessage, MlsError> {
+        let mut group = self.inner();
+        let inner = group.encrypt_application_message(message, Vec::new())?;
+        Ok(LiteMessage { inner })
+    }
+
     /// Process an inbound message for this group.
     ///
     /// # Warning
