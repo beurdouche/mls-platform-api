@@ -250,6 +250,16 @@ impl LiteGroup {
     }
 }
 
+/// Extract the basic credential identifier from a  from a key package.
+fn signing_identity_to_identifier(signing_identity: &SigningIdentity) -> Result<Vec<u8>, MlsError> {
+    match &signing_identity.credential {
+        Credential::Basic(credential) => Ok(credential.identifier.clone()),
+        _ => Err(MlsError::RequiredCredentialNotFound(
+            BasicCredential::credential_type(),
+        )),
+    }
+}
+
 /// Extract the basic credential identifier from a key package.
 fn key_package_into_identifier(message: mls_rs::MlsMessage) -> Result<Vec<u8>, MlsError> {
     let key_package = message
@@ -314,10 +324,9 @@ impl LiteGroup {
     /// See [`mls_rs::group::CommitBuilder::remove_member`] for details.
     pub fn remove_member(
         &self,
-        member: Arc<LiteMessage>,
+        member: Arc<SigningIdentity>,
     ) -> Result<mls_rs::group::CommitOutput, MlsError> {
-        let member = arc_unwrap_or_clone(member);
-        let identifier = key_package_into_identifier(member.inner)?;
+        let identifier = signing_identity_to_identifier(&member)?;
         let mut group = self.inner();
         let member = group.member_with_identity(&identifier)?;
         group.commit_builder().remove_member(member.index)?.build()
