@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
 
 use mls_rs::client_builder::{BaseConfig, WithCryptoProvider, WithIdentityProvider};
 use mls_rs::error::{IntoAnyError, MlsError};
@@ -203,7 +205,7 @@ impl From<LiteCipherSuite> for mls_rs::CipherSuite {
 /// See [`mls_rs::CipherSuiteProvider::signature_key_generate`]
 /// for details.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
-pub fn generate_signature_keypair(
+pub async fn generate_signature_keypair(
     cipher_suite: LiteCipherSuite,
 ) -> Result<LiteSignatureKeypair, LiteError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
@@ -213,6 +215,7 @@ pub fn generate_signature_keypair(
 
     let (secret_key, public_key) = cipher_suite_provider
         .signature_key_generate()
+        .await
         .map_err(|err| MlsError::CryptoProviderError(err.into_any_error()))?;
 
     Ok(LiteSignatureKeypair {
@@ -267,8 +270,8 @@ impl LiteClient {
     ///
     /// See [`mls_rs::Client::generate_key_package_message`] for
     /// details.
-    pub fn generate_key_package_message(&self) -> Result<LiteMessage, LiteError> {
-        let message = self.inner.generate_key_package_message()?;
+    pub async fn generate_key_package_message(&self) -> Result<LiteMessage, LiteError> {
+        let message = self.inner.generate_key_package_message().await?;
         Ok(message.into())
     }
 
@@ -279,11 +282,15 @@ impl LiteClient {
     ///
     /// See [`mls_rs::Client::create_group`] and
     /// [`mls_rs::Client::create_group_with_id`] for details.
-    pub fn create_group(&self, group_id: Option<Vec<u8>>) -> Result<LiteGroup, LiteError> {
+    pub async fn create_group(&self, group_id: Option<Vec<u8>>) -> Result<LiteGroup, LiteError> {
         let extensions = mls_rs::ExtensionList::new();
         let inner = match group_id {
-            Some(group_id) => self.inner.create_group_with_id(group_id, extensions)?,
-            None => self.inner.create_group(extensions)?,
+            Some(group_id) => {
+                self.inner
+                    .create_group_with_id(group_id, extensions)
+                    .await?
+            }
+            None => self.inner.create_group(extensions).await?,
         };
         Ok(LiteGroup {
             inner: Arc::new(Mutex::new(inner)),
@@ -293,9 +300,12 @@ impl LiteClient {
     /// Join an existing group.
     ///
     /// See [`mls_rs::Client::join_group`] for details.
-    pub fn join_group(&self, welcome_message: Arc<LiteMessage>) -> Result<LiteJoinInfo, LiteError> {
+    pub async fn join_group(
+        &self,
+        welcome_message: Arc<LiteMessage>,
+    ) -> Result<LiteJoinInfo, LiteError> {
         let welcome_message = arc_unwrap_or_clone(welcome_message);
-        let (group, new_member_info) = self.inner.join_group(None, welcome_message.inner)?;
+        let (group, new_member_info) = self.inner.join_group(None, welcome_message.inner).await?;
 
         let group = Arc::new(LiteGroup {
             inner: Arc::new(Mutex::new(group)),
@@ -333,12 +343,12 @@ pub struct LiteGroup {
 }
 
 impl LiteGroup {
-    fn inner(&self) -> std::sync::MutexGuard<'_, mls_rs::Group<LiteConfig>> {
-        self.inner.lock().unwrap()
+    async fn inner(&self) -> tokio::sync::MutexGuard<'_, mls_rs::Group<LiteConfig>> {
+        self.inner.lock().await
     }
 
-    fn index_to_identity(&self, index: u32) -> Result<SigningIdentity, LiteError> {
-        let group = self.inner();
+    async fn index_to_identity(&self, index: u32) -> Result<SigningIdentity, LiteError> {
+        let group = self.inner().await;
         let member = group
             .member_at_index(index)
             .ok_or(MlsError::InvalidNodeIndex(index))?;
@@ -380,8 +390,9 @@ impl LiteGroup {
     ///
     /// Returns the resulting commit message. See
     /// [`mls_rs::Group::commit`] for details.
-    pub fn commit(&self) -> Result<LiteMessage, LiteError> {
-        let commit_output = self.inner().commit(Vec::new())?;
+    pub async fn commit(&self) -> Result<LiteMessage, LiteError> {
+        let mut group = self.inner().await;
+        let commit_output = group.commit(Vec::new()).await?;
         Ok(commit_output.commit_message.into())
     }
 
@@ -391,13 +402,17 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::group::CommitBuilder::add_member`] for details.
-    pub fn add_member(&self, member: Arc<LiteMessage>) -> Result<LiteCommitOutput, LiteError> {
+    pub async fn add_member(
+        &self,
+        member: Arc<LiteMessage>,
+    ) -> Result<LiteCommitOutput, LiteError> {
         let member = arc_unwrap_or_clone(member);
-        let commit_output = self
-            .inner()
+        let mut group = self.inner().await;
+        let commit_output = group
             .commit_builder()
             .add_member(member.inner)?
-            .build()?;
+            .build()
+            .await?;
         Ok(commit_output.into())
     }
 
@@ -407,10 +422,13 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::Group::propose_add`] for details.
-    pub fn propose_add_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, LiteError> {
+    pub async fn propose_add_member(
+        &self,
+        member: Arc<LiteMessage>,
+    ) -> Result<LiteMessage, LiteError> {
         let member = arc_unwrap_or_clone(member);
-        let mut group = self.inner();
-        let mls_message = group.propose_add(member.inner, Vec::new())?;
+        let mut group = self.inner().await;
+        let mls_message = group.propose_add(member.inner, Vec::new()).await?;
         Ok(mls_message.into())
     }
 
@@ -419,17 +437,18 @@ impl LiteGroup {
     /// The member is representated by the key package in `member`.
     ///
     /// See [`mls_rs::group::CommitBuilder::remove_member`] for details.
-    pub fn remove_member(
+    pub async fn remove_member(
         &self,
         member: Arc<SigningIdentity>,
     ) -> Result<LiteCommitOutput, LiteError> {
         let identifier = signing_identity_to_identifier(&member)?;
-        let mut group = self.inner();
-        let member = group.member_with_identity(&identifier)?;
+        let mut group = self.inner().await;
+        let member = group.member_with_identity(&identifier).await?;
         let commit_output = group
             .commit_builder()
             .remove_member(member.index)?
-            .build()?;
+            .build()
+            .await?;
         Ok(commit_output.into())
     }
 
@@ -439,22 +458,27 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::group::Group::propose_remove`] for details.
-    pub fn propose_remove_member(
+    pub async fn propose_remove_member(
         &self,
         member: Arc<LiteMessage>,
     ) -> Result<LiteMessage, LiteError> {
         let member = arc_unwrap_or_clone(member);
         let identifier = key_package_into_identifier(member.inner)?;
-        let mut group = self.inner();
-        let member = group.member_with_identity(&identifier)?;
-        let mls_message = group.propose_remove(member.index, Vec::new())?;
+        let mut group = self.inner().await;
+        let member = group.member_with_identity(&identifier).await?;
+        let mls_message = group.propose_remove(member.index, Vec::new()).await?;
         Ok(mls_message.into())
     }
 
     /// Encrypt an application message using the current group state.
-    pub fn encrypt_application_message(&self, message: &[u8]) -> Result<LiteMessage, LiteError> {
-        let mut group = self.inner();
-        let mls_message = group.encrypt_application_message(message, Vec::new())?;
+    pub async fn encrypt_application_message(
+        &self,
+        message: &[u8],
+    ) -> Result<LiteMessage, LiteError> {
+        let mut group = self.inner().await;
+        let mls_message = group
+            .encrypt_application_message(message, Vec::new())
+            .await?;
         Ok(mls_message.into())
     }
 
@@ -465,26 +489,29 @@ impl LiteGroup {
     /// Changes to the group’s state as a result of processing message
     /// will not be persisted until [`LiteGroup::write_to_storage`] is
     /// called.
-    pub fn process_incoming_message(
+    pub async fn process_incoming_message(
         &self,
         message: Arc<LiteMessage>,
     ) -> Result<LiteReceivedMessage, LiteError> {
         let message = arc_unwrap_or_clone(message);
-        let mut group = self.inner();
-        match group.process_incoming_message(message.inner)? {
+        let mut group = self.inner().await;
+        match group.process_incoming_message(message.inner).await? {
             ReceivedMessage::ApplicationMessage(application_message) => {
-                let sender = Arc::new(self.index_to_identity(application_message.sender_index)?);
+                let sender = Arc::new(
+                    self.index_to_identity(application_message.sender_index)
+                        .await?,
+                );
                 let data = application_message.authenticated_data;
                 Ok(LiteReceivedMessage::ApplicationMessage { sender, data })
             }
             ReceivedMessage::Commit(commit_message) => {
-                let committer = Arc::new(self.index_to_identity(commit_message.committer)?);
+                let committer = Arc::new(self.index_to_identity(commit_message.committer).await?);
                 Ok(LiteReceivedMessage::Commit { committer })
             }
             ReceivedMessage::Proposal(proposal_message) => {
                 let sender = match proposal_message.sender {
                     mls_rs::group::ProposalSender::Member(index) => {
-                        Arc::new(self.index_to_identity(index)?)
+                        Arc::new(self.index_to_identity(index).await?)
                     }
                     _ => todo!("External and NewMember proposal senders are not supported"),
                 };
