@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 use std::sync::{Arc, Mutex};
 
 use mls_rs::client_builder::{BaseConfig, WithCryptoProvider, WithIdentityProvider};
@@ -97,12 +95,12 @@ pub struct LiteJoinInfo {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Clone, Debug)]
 pub struct LiteKeyPackage {
-    inner: mls_rs::KeyPackage,
+    _inner: mls_rs::KeyPackage,
 }
 
 impl From<mls_rs::KeyPackage> for LiteKeyPackage {
     fn from(inner: mls_rs::KeyPackage) -> Self {
-        Self { inner }
+        Self { _inner: inner }
     }
 }
 
@@ -122,7 +120,13 @@ impl From<mls_rs::MlsMessage> for LiteMessage {
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Clone, Debug)]
 pub struct LiteProposal {
-    inner: mls_rs::group::proposal::Proposal,
+    _inner: mls_rs::group::proposal::Proposal,
+}
+
+impl From<mls_rs::group::proposal::Proposal> for LiteProposal {
+    fn from(inner: mls_rs::group::proposal::Proposal) -> Self {
+        Self { _inner: inner }
+    }
 }
 
 /// Light-weight wrapper around a [`mls_rs::group::ReceivedMessage`].
@@ -457,9 +461,7 @@ impl LiteGroup {
                     }
                     _ => todo!("External and NewMember proposal senders are not supported"),
                 };
-                let proposal = Arc::new(LiteProposal {
-                    inner: proposal_message.proposal,
-                });
+                let proposal = Arc::new(proposal_message.proposal.into());
                 Ok(LiteReceivedMessage::Proposal { sender, proposal })
             }
             // TODO: ReceivedMessage::GroupInfo does not have any
