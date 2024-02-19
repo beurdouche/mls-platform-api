@@ -75,15 +75,41 @@ pub type LiteConfig = WithIdentityProvider<
     WithCryptoProvider<OpensslCryptoProvider, BaseConfig>,
 >;
 
+/// Light-weight wrapper around a [`mls_rs::ExtensionList`].
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
+pub struct LiteExtensionList {
+    _inner: mls_rs::ExtensionList,
+}
+
+impl From<mls_rs::ExtensionList> for LiteExtensionList {
+    fn from(inner: mls_rs::ExtensionList) -> Self {
+        Self { _inner: inner }
+    }
+}
+
+/// Light-weight wrapper around a [`mls_rs::Extension`].
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Debug, Clone)]
+pub struct LiteExtension {
+    _inner: mls_rs::Extension,
+}
+
+impl From<mls_rs::Extension> for LiteExtension {
+    fn from(inner: mls_rs::Extension) -> Self {
+        Self { _inner: inner }
+    }
+}
+
 /// Light-weight wrapper around a [`mls_rs::Group`] and a  [`mls_rs::group::NewMemberInfo`].
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Clone)]
 pub struct LiteJoinInfo {
     /// The group that was joined.
-    group: Arc<LiteGroup>,
+    pub group: Arc<LiteGroup>,
     /// Group info extensions found within the Welcome message used to join
     /// the group.
-    pub group_info_extensions: Arc<mls_rs::ExtensionList>,
+    pub group_info_extensions: Arc<LiteExtensionList>,
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
@@ -274,11 +300,23 @@ impl LiteClient {
         let group = Arc::new(LiteGroup {
             inner: Arc::new(Mutex::new(group)),
         });
-        let group_info_extensions = Arc::new(new_member_info.group_info_extensions);
+        let group_info_extensions = Arc::new(new_member_info.group_info_extensions.into());
         Ok(LiteJoinInfo {
             group,
             group_info_extensions,
         })
+    }
+}
+
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
+pub struct LiteCommitOutput {
+    _inner: mls_rs::group::CommitOutput,
+}
+
+impl From<mls_rs::group::CommitOutput> for LiteCommitOutput {
+    fn from(inner: mls_rs::group::CommitOutput) -> Self {
+        Self { _inner: inner }
     }
 }
 
@@ -311,12 +349,10 @@ impl LiteGroup {
 /// Extract the basic credential identifier from a  from a key package.
 fn signing_identity_to_identifier(
     signing_identity: &SigningIdentity,
-) -> Result<Vec<u8>, mls_rs::error::MlsError> {
+) -> Result<Vec<u8>, LiteError> {
     match &signing_identity.credential {
         Credential::Basic(credential) => Ok(credential.identifier.clone()),
-        _ => Err(MlsError::RequiredCredentialNotFound(
-            BasicCredential::credential_type(),
-        )),
+        _ => Err(MlsError::RequiredCredentialNotFound(BasicCredential::credential_type()).into()),
     }
 }
 
@@ -355,17 +391,14 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::group::CommitBuilder::add_member`] for details.
-    pub fn add_member(
-        &self,
-        member: Arc<LiteMessage>,
-    ) -> Result<mls_rs::group::CommitOutput, LiteError> {
+    pub fn add_member(&self, member: Arc<LiteMessage>) -> Result<LiteCommitOutput, LiteError> {
         let member = arc_unwrap_or_clone(member);
         let commit_output = self
             .inner()
             .commit_builder()
             .add_member(member.inner)?
             .build()?;
-        Ok(commit_output)
+        Ok(commit_output.into())
     }
 
     /// Propose to add a member to this group.
@@ -389,7 +422,7 @@ impl LiteGroup {
     pub fn remove_member(
         &self,
         member: Arc<SigningIdentity>,
-    ) -> Result<mls_rs::group::CommitOutput, LiteError> {
+    ) -> Result<LiteCommitOutput, LiteError> {
         let identifier = signing_identity_to_identifier(&member)?;
         let mut group = self.inner();
         let member = group.member_with_identity(&identifier)?;
@@ -397,7 +430,7 @@ impl LiteGroup {
             .commit_builder()
             .remove_member(member.index)?
             .build()?;
-        Ok(commit_output)
+        Ok(commit_output.into())
     }
 
     /// Propose to remove a member from this group.
