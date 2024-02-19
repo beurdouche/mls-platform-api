@@ -502,12 +502,4 @@ impl LiteGroup {
             }
         }
     }
-
-    /// Apply a pending commit.
-    ///
-    /// See [`mls_rs::Group::apply_pending_commit`] for details.
-    pub fn apply_pending_commit(&self) -> Result<(), MlsError> {
-        self.inner().apply_pending_commit()?;
-        Ok(())
-    }
 }
