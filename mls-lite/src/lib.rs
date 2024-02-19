@@ -9,15 +9,9 @@ use mls_rs::{CipherSuiteProvider, Client, CryptoProvider};
 use mls_rs_core::identity::{BasicCredential, SigningIdentity};
 use mls_rs_crypto_openssl::OpensslCryptoProvider;
 
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
 
 #[cfg(feature = "uniffi")]
-uniffi::ffi_converter_forward!(
-    mls_rs::CipherSuite,
-    mls_rs_core::UniFfiTag,
-    crate::UniFfiTag
-);
+uniffi::setup_scaffolding!();
 
 /// Unwrap the `Arc` if there is a single strong reference, otherwise
 /// clone the inner value.
