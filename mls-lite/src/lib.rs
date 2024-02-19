@@ -24,8 +24,9 @@ fn arc_unwrap_or_clone<T: Clone>(arc: Arc<T>) -> T {
     }
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
+#[cfg_attr(feature = "uniffi", uniffi(flat_error))]
 #[derive(thiserror::Error, Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[non_exhaustive]
 pub enum LiteError {
     #[error("A mls-rs error occurred")]
@@ -157,16 +158,16 @@ impl From<mls_rs::group::proposal::Proposal> for LiteProposal {
 pub enum LiteReceivedMessage {
     /// A decrypted application message.
     ApplicationMessage {
-        sender: Arc<SigningIdentity>,
+        sender: Arc<LiteSigningIdentity>,
         data: Vec<u8>,
     },
 
     /// A new commit was processed creating a new group state.
-    Commit { committer: Arc<SigningIdentity> },
+    Commit { committer: Arc<LiteSigningIdentity> },
 
     /// A proposal was received.
     Proposal {
-        sender: Arc<SigningIdentity>,
+        sender: Arc<LiteSigningIdentity>,
         proposal: Arc<LiteProposal>,
     },
 
@@ -330,6 +331,18 @@ impl From<mls_rs::group::CommitOutput> for LiteCommitOutput {
     }
 }
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
+pub struct LiteSigningIdentity {
+    inner: mls_rs_core::identity::SigningIdentity,
+}
+
+impl From<mls_rs_core::identity::SigningIdentity> for LiteSigningIdentity {
+    fn from(inner: mls_rs_core::identity::SigningIdentity) -> Self {
+        Self { inner }
+    }
+}
+
 /// An MLS end-to-end encrypted group.
 ///
 /// The group is used to send and process incoming messages and to
@@ -439,9 +452,9 @@ impl LiteGroup {
     /// See [`mls_rs::group::CommitBuilder::remove_member`] for details.
     pub async fn remove_member(
         &self,
-        member: Arc<SigningIdentity>,
+        member: Arc<LiteSigningIdentity>,
     ) -> Result<LiteCommitOutput, LiteError> {
-        let identifier = signing_identity_to_identifier(&member)?;
+        let identifier = signing_identity_to_identifier(&member.inner)?;
         let mut group = self.inner().await;
         let member = group.member_with_identity(&identifier).await?;
         let commit_output = group
@@ -499,19 +512,24 @@ impl LiteGroup {
             ReceivedMessage::ApplicationMessage(application_message) => {
                 let sender = Arc::new(
                     self.index_to_identity(application_message.sender_index)
-                        .await?,
+                        .await?
+                        .into(),
                 );
                 let data = application_message.authenticated_data;
                 Ok(LiteReceivedMessage::ApplicationMessage { sender, data })
             }
             ReceivedMessage::Commit(commit_message) => {
-                let committer = Arc::new(self.index_to_identity(commit_message.committer).await?);
+                let committer = Arc::new(
+                    self.index_to_identity(commit_message.committer)
+                        .await?
+                        .into(),
+                );
                 Ok(LiteReceivedMessage::Commit { committer })
             }
             ReceivedMessage::Proposal(proposal_message) => {
                 let sender = match proposal_message.sender {
                     mls_rs::group::ProposalSender::Member(index) => {
-                        Arc::new(self.index_to_identity(index).await?)
+                        Arc::new(self.index_to_identity(index).await?.into())
                     }
                     _ => todo!("External and NewMember proposal senders are not supported"),
                 };
