@@ -30,13 +30,64 @@ fn arc_unwrap_or_clone<T: Clone>(arc: Arc<T>) -> T {
     }
 }
 
-/// A ([`mls_rs::crypto::SignaturePublicKey`],
-/// [`mls_rs::crypto::SignatureSecretKey`]) pair.
+#[derive(thiserror::Error, Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[non_exhaustive]
+pub enum LiteError {
+    #[error("A mls-rs error occurred")]
+    MlsError { inner: mls_rs::error::MlsError },
+}
+
+impl From<mls_rs::error::MlsError> for LiteError {
+    fn from(inner: mls_rs::error::MlsError) -> Self {
+        Self::MlsError { inner }
+    }
+}
+
+/// A [`mls_rs::crypto::SignaturePublicKey`] wrapper.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
+pub struct LiteSignaturePublicKey {
+    inner: mls_rs::crypto::SignaturePublicKey,
+}
+
+//impl From<mls_rs::crypto::SignaturePublicKey> for LiteSignaturePublicKey {
+//    fn from(inner: mls_rs::crypto::SignaturePublicKey) -> Self {
+//        Self { inner }
+//    }
+//}
+//
+//impl From<LiteSignaturePublicKey> for mls_rs::crypto::SignaturePublicKey {
+//    fn from(public_key: LiteSignaturePublicKey) -> Self {
+//        public_key.inner
+//    }
+//}
+
+/// A [`mls_rs::crypto::SignatureSecretKey`] wrapper.
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
+#[derive(Clone, Debug)]
+pub struct LiteSignatureSecretKey {
+    inner: mls_rs::crypto::SignatureSecretKey,
+}
+
+//impl From<mls_rs::crypto::SignatureSecretKey> for LiteSignatureSecretKey {
+//    fn from(inner: mls_rs::crypto::SignatureSecretKey) -> Self {
+//        Self { inner }
+//    }
+//}
+//
+//impl From<LiteSignatureSecretKey> for mls_rs::crypto::SignatureSecretKey {
+//    fn from(secret_key: LiteSignatureSecretKey) -> Self {
+//        secret_key.inner
+//    }
+//}
+
+/// A ([`SignaturePublicKey`], [`SignatureSecretKey`]) pair.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Clone, Debug)]
-pub struct SignatureKeypair {
-    public_key: Arc<mls_rs::crypto::SignaturePublicKey>,
-    secret_key: Arc<mls_rs::crypto::SignatureSecretKey>,
+pub struct LiteSignatureKeypair {
+    public_key: Arc<LiteSignaturePublicKey>,
+    secret_key: Arc<LiteSignatureSecretKey>,
 }
 
 pub type LiteConfig = WithIdentityProvider<
@@ -66,15 +117,6 @@ pub struct LiteKeyPackage {
 #[derive(Clone, Debug)]
 pub struct LiteMessage {
     inner: mls_rs::MlsMessage,
-}
-
-impl LiteMessage {
-    /// Convert a message into a key package.
-    ///
-    /// See [`mls_rs::Group::apply_pending_commit`] for details.
-    pub fn into_key_package(self) -> Option<mls_rs::KeyPackage> {
-        self.inner.into_key_package()
-    }
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
@@ -111,7 +153,24 @@ pub enum LiteReceivedMessage {
     KeyPackage { key_package: Arc<LiteKeyPackage> },
 }
 
-impl LiteReceivedMessage {}
+/// Supported cipher suites.
+///
+/// This is a subset of the cipher suites found in
+/// [`mls_rs::CipherSuite`].
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Copy, Clone, Debug)]
+pub enum LiteCipherSuite {
+    // TODO(mgeisler): fill out.
+    Curve25519Aes128,
+}
+
+impl From<LiteCipherSuite> for mls_rs::CipherSuite {
+    fn from(cipher_suite: LiteCipherSuite) -> mls_rs::CipherSuite {
+        match cipher_suite {
+            LiteCipherSuite::Curve25519Aes128 => mls_rs::CipherSuite::CURVE25519_AES128,
+        }
+    }
+}
 
 /// Generate a MLS signature keypair.
 ///
@@ -121,20 +180,20 @@ impl LiteReceivedMessage {}
 /// for details.
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 pub fn generate_signature_keypair(
-    cipher_suite: mls_rs::CipherSuite,
-) -> Result<SignatureKeypair, MlsError> {
+    cipher_suite: LiteCipherSuite,
+) -> Result<LiteSignatureKeypair, LiteError> {
     let crypto_provider = mls_rs_crypto_openssl::OpensslCryptoProvider::default();
     let cipher_suite_provider = crypto_provider
-        .cipher_suite_provider(cipher_suite)
-        .ok_or(MlsError::UnsupportedCipherSuite(cipher_suite))?;
+        .cipher_suite_provider(cipher_suite.into())
+        .ok_or(MlsError::UnsupportedCipherSuite(cipher_suite.into()))?;
 
     let (secret_key, public_key) = cipher_suite_provider
         .signature_key_generate()
         .map_err(|err| MlsError::CryptoProviderError(err.into_any_error()))?;
 
-    Ok(SignatureKeypair {
-        public_key: Arc::new(public_key),
-        secret_key: Arc::new(secret_key),
+    Ok(LiteSignatureKeypair {
+        public_key: Arc::new(LiteSignaturePublicKey { inner: public_key }),
+        secret_key: Arc::new(LiteSignatureSecretKey { inner: secret_key }),
     })
 }
 
@@ -158,19 +217,20 @@ impl LiteClient {
     #[uniffi::constructor]
     pub fn new(
         id: Vec<u8>,
-        signature_keypair: SignatureKeypair,
-        cipher_suite: mls_rs::CipherSuite,
+        signature_keypair: LiteSignatureKeypair,
+        cipher_suite: LiteCipherSuite,
     ) -> Self {
         let public_key = arc_unwrap_or_clone(signature_keypair.public_key);
         let secret_key = arc_unwrap_or_clone(signature_keypair.secret_key);
         let crypto_provider = OpensslCryptoProvider::new();
         let basic_credential = BasicCredential::new(id);
-        let signing_identity = SigningIdentity::new(basic_credential.into_credential(), public_key);
+        let signing_identity =
+            SigningIdentity::new(basic_credential.into_credential(), public_key.inner);
         LiteClient {
             inner: Client::builder()
                 .crypto_provider(crypto_provider)
                 .identity_provider(BasicIdentityProvider::new())
-                .signing_identity(signing_identity, secret_key, cipher_suite)
+                .signing_identity(signing_identity, secret_key.inner, cipher_suite.into())
                 .build(),
         }
     }
@@ -183,7 +243,7 @@ impl LiteClient {
     ///
     /// See [`mls_rs::Client::generate_key_package_message`] for
     /// details.
-    pub fn generate_key_package_message(&self) -> Result<LiteMessage, MlsError> {
+    pub fn generate_key_package_message(&self) -> Result<LiteMessage, LiteError> {
         let inner = self.inner.generate_key_package_message()?;
         Ok(LiteMessage { inner })
     }
@@ -195,7 +255,7 @@ impl LiteClient {
     ///
     /// See [`mls_rs::Client::create_group`] and
     /// [`mls_rs::Client::create_group_with_id`] for details.
-    pub fn create_group(&self, group_id: Option<Vec<u8>>) -> Result<LiteGroup, MlsError> {
+    pub fn create_group(&self, group_id: Option<Vec<u8>>) -> Result<LiteGroup, LiteError> {
         let extensions = mls_rs::ExtensionList::new();
         let inner = match group_id {
             Some(group_id) => self.inner.create_group_with_id(group_id, extensions)?,
@@ -209,7 +269,7 @@ impl LiteClient {
     /// Join an existing group.
     ///
     /// See [`mls_rs::Client::join_group`] for details.
-    pub fn join_group(&self, welcome_message: Arc<LiteMessage>) -> Result<LiteJoinInfo, MlsError> {
+    pub fn join_group(&self, welcome_message: Arc<LiteMessage>) -> Result<LiteJoinInfo, LiteError> {
         let welcome_message = arc_unwrap_or_clone(welcome_message);
         let (group, new_member_info) = self.inner.join_group(None, welcome_message.inner)?;
 
@@ -241,7 +301,7 @@ impl LiteGroup {
         self.inner.lock().unwrap()
     }
 
-    fn index_to_identity(&self, index: u32) -> Result<SigningIdentity, MlsError> {
+    fn index_to_identity(&self, index: u32) -> Result<SigningIdentity, LiteError> {
         let group = self.inner();
         let member = group
             .member_at_index(index)
@@ -251,7 +311,9 @@ impl LiteGroup {
 }
 
 /// Extract the basic credential identifier from a  from a key package.
-fn signing_identity_to_identifier(signing_identity: &SigningIdentity) -> Result<Vec<u8>, MlsError> {
+fn signing_identity_to_identifier(
+    signing_identity: &SigningIdentity,
+) -> Result<Vec<u8>, mls_rs::error::MlsError> {
     match &signing_identity.credential {
         Credential::Basic(credential) => Ok(credential.identifier.clone()),
         _ => Err(MlsError::RequiredCredentialNotFound(
@@ -261,15 +323,15 @@ fn signing_identity_to_identifier(signing_identity: &SigningIdentity) -> Result<
 }
 
 /// Extract the basic credential identifier from a key package.
-fn key_package_into_identifier(message: mls_rs::MlsMessage) -> Result<Vec<u8>, MlsError> {
+fn key_package_into_identifier(message: mls_rs::MlsMessage) -> Result<Vec<u8>, LiteError> {
     let key_package = message
         .into_key_package()
         .ok_or(MlsError::UnexpectedMessageType)?;
     let signing_identity = key_package.signing_identity();
     let Credential::Basic(credential) = &signing_identity.credential else {
-        return Err(MlsError::RequiredCredentialNotFound(
-            BasicCredential::credential_type(),
-        ));
+        return Err(
+            MlsError::RequiredCredentialNotFound(BasicCredential::credential_type()).into(),
+        );
     };
 
     Ok(credential.identifier.clone())
@@ -283,8 +345,9 @@ impl LiteGroup {
     /// [`MlsRules::commit_options`](`mls_rs::MlsRules::commit_options`).
     ///
     /// See [`mls_rs::Group::commit`] for details.
-    pub fn commit(&self) -> Result<mls_rs::group::CommitOutput, MlsError> {
-        self.inner().commit(Vec::new())
+    pub fn commit(&self) -> Result<mls_rs::group::CommitOutput, LiteError> {
+        let commit_output = self.inner().commit(Vec::new())?;
+        Ok(commit_output)
     }
 
     /// Commit the addition of a member.
@@ -296,12 +359,14 @@ impl LiteGroup {
     pub fn add_member(
         &self,
         member: Arc<LiteMessage>,
-    ) -> Result<mls_rs::group::CommitOutput, MlsError> {
+    ) -> Result<mls_rs::group::CommitOutput, LiteError> {
         let member = arc_unwrap_or_clone(member);
-        self.inner()
+        let commit_output = self
+            .inner()
             .commit_builder()
             .add_member(member.inner)?
-            .build()
+            .build()?;
+        Ok(commit_output)
     }
 
     /// Propose to add a member to this group.
@@ -310,7 +375,7 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::Group::propose_add`] for details.
-    pub fn propose_add_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, MlsError> {
+    pub fn propose_add_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, LiteError> {
         let member = arc_unwrap_or_clone(member);
         let mut group = self.inner();
         let inner = group.propose_add(member.inner, Vec::new())?;
@@ -325,11 +390,15 @@ impl LiteGroup {
     pub fn remove_member(
         &self,
         member: Arc<SigningIdentity>,
-    ) -> Result<mls_rs::group::CommitOutput, MlsError> {
+    ) -> Result<mls_rs::group::CommitOutput, LiteError> {
         let identifier = signing_identity_to_identifier(&member)?;
         let mut group = self.inner();
         let member = group.member_with_identity(&identifier)?;
-        group.commit_builder().remove_member(member.index)?.build()
+        let commit_output = group
+            .commit_builder()
+            .remove_member(member.index)?
+            .build()?;
+        Ok(commit_output)
     }
 
     /// Propose to remove a member from this group.
@@ -338,7 +407,10 @@ impl LiteGroup {
     /// The result is the welcome message to send to this member.
     ///
     /// See [`mls_rs::group::Group::propose_remove`] for details.
-    pub fn propose_remove_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, MlsError> {
+    pub fn propose_remove_member(
+        &self,
+        member: Arc<LiteMessage>,
+    ) -> Result<LiteMessage, LiteError> {
         let member = arc_unwrap_or_clone(member);
         let identifier = key_package_into_identifier(member.inner)?;
         let mut group = self.inner();
@@ -348,7 +420,7 @@ impl LiteGroup {
     }
 
     /// Encrypt an application message using the current group state.
-    pub fn encrypt_application_message(&self, message: &[u8]) -> Result<LiteMessage, MlsError> {
+    pub fn encrypt_application_message(&self, message: &[u8]) -> Result<LiteMessage, LiteError> {
         let mut group = self.inner();
         let inner = group.encrypt_application_message(message, Vec::new())?;
         Ok(LiteMessage { inner })
@@ -364,7 +436,7 @@ impl LiteGroup {
     pub fn process_incoming_message(
         &self,
         message: Arc<LiteMessage>,
-    ) -> Result<LiteReceivedMessage, MlsError> {
+    ) -> Result<LiteReceivedMessage, LiteError> {
         let message = arc_unwrap_or_clone(message);
         let mut group = self.inner();
         match group.process_incoming_message(message.inner)? {
