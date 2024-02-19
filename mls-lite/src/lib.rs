@@ -51,17 +51,11 @@ pub struct LiteSignaturePublicKey {
     inner: mls_rs::crypto::SignaturePublicKey,
 }
 
-//impl From<mls_rs::crypto::SignaturePublicKey> for LiteSignaturePublicKey {
-//    fn from(inner: mls_rs::crypto::SignaturePublicKey) -> Self {
-//        Self { inner }
-//    }
-//}
-//
-//impl From<LiteSignaturePublicKey> for mls_rs::crypto::SignaturePublicKey {
-//    fn from(public_key: LiteSignaturePublicKey) -> Self {
-//        public_key.inner
-//    }
-//}
+impl From<mls_rs::crypto::SignaturePublicKey> for LiteSignaturePublicKey {
+    fn from(inner: mls_rs::crypto::SignaturePublicKey) -> Self {
+        Self { inner }
+    }
+}
 
 /// A [`mls_rs::crypto::SignatureSecretKey`] wrapper.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
@@ -70,17 +64,11 @@ pub struct LiteSignatureSecretKey {
     inner: mls_rs::crypto::SignatureSecretKey,
 }
 
-//impl From<mls_rs::crypto::SignatureSecretKey> for LiteSignatureSecretKey {
-//    fn from(inner: mls_rs::crypto::SignatureSecretKey) -> Self {
-//        Self { inner }
-//    }
-//}
-//
-//impl From<LiteSignatureSecretKey> for mls_rs::crypto::SignatureSecretKey {
-//    fn from(secret_key: LiteSignatureSecretKey) -> Self {
-//        secret_key.inner
-//    }
-//}
+impl From<mls_rs::crypto::SignatureSecretKey> for LiteSignatureSecretKey {
+    fn from(inner: mls_rs::crypto::SignatureSecretKey) -> Self {
+        Self { inner }
+    }
+}
 
 /// A ([`SignaturePublicKey`], [`SignatureSecretKey`]) pair.
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -112,11 +100,23 @@ pub struct LiteKeyPackage {
     inner: mls_rs::KeyPackage,
 }
 
+impl From<mls_rs::KeyPackage> for LiteKeyPackage {
+    fn from(inner: mls_rs::KeyPackage) -> Self {
+        Self { inner }
+    }
+}
+
 /// Light-weight wrapper around a [`mls_rs::MlsMessage`].
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Clone, Debug)]
 pub struct LiteMessage {
     inner: mls_rs::MlsMessage,
+}
+
+impl From<mls_rs::MlsMessage> for LiteMessage {
+    fn from(inner: mls_rs::MlsMessage) -> Self {
+        Self { inner }
+    }
 }
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
@@ -192,8 +192,8 @@ pub fn generate_signature_keypair(
         .map_err(|err| MlsError::CryptoProviderError(err.into_any_error()))?;
 
     Ok(LiteSignatureKeypair {
-        public_key: Arc::new(LiteSignaturePublicKey { inner: public_key }),
-        secret_key: Arc::new(LiteSignatureSecretKey { inner: secret_key }),
+        public_key: Arc::new(public_key.into()),
+        secret_key: Arc::new(secret_key.into()),
     })
 }
 
@@ -244,8 +244,8 @@ impl LiteClient {
     /// See [`mls_rs::Client::generate_key_package_message`] for
     /// details.
     pub fn generate_key_package_message(&self) -> Result<LiteMessage, LiteError> {
-        let inner = self.inner.generate_key_package_message()?;
-        Ok(LiteMessage { inner })
+        let message = self.inner.generate_key_package_message()?;
+        Ok(message.into())
     }
 
     /// Create and immediately join a new group.
@@ -344,10 +344,11 @@ impl LiteGroup {
     /// TODO: ensure `path_required` is always set in
     /// [`MlsRules::commit_options`](`mls_rs::MlsRules::commit_options`).
     ///
-    /// See [`mls_rs::Group::commit`] for details.
-    pub fn commit(&self) -> Result<mls_rs::group::CommitOutput, LiteError> {
+    /// Returns the resulting commit message. See
+    /// [`mls_rs::Group::commit`] for details.
+    pub fn commit(&self) -> Result<LiteMessage, LiteError> {
         let commit_output = self.inner().commit(Vec::new())?;
-        Ok(commit_output)
+        Ok(commit_output.commit_message.into())
     }
 
     /// Commit the addition of a member.
@@ -378,8 +379,8 @@ impl LiteGroup {
     pub fn propose_add_member(&self, member: Arc<LiteMessage>) -> Result<LiteMessage, LiteError> {
         let member = arc_unwrap_or_clone(member);
         let mut group = self.inner();
-        let inner = group.propose_add(member.inner, Vec::new())?;
-        Ok(LiteMessage { inner })
+        let mls_message = group.propose_add(member.inner, Vec::new())?;
+        Ok(mls_message.into())
     }
 
     /// Propose and commit the removal of a member.
@@ -415,15 +416,15 @@ impl LiteGroup {
         let identifier = key_package_into_identifier(member.inner)?;
         let mut group = self.inner();
         let member = group.member_with_identity(&identifier)?;
-        let inner = group.propose_remove(member.index, Vec::new())?;
-        Ok(LiteMessage { inner })
+        let mls_message = group.propose_remove(member.index, Vec::new())?;
+        Ok(mls_message.into())
     }
 
     /// Encrypt an application message using the current group state.
     pub fn encrypt_application_message(&self, message: &[u8]) -> Result<LiteMessage, LiteError> {
         let mut group = self.inner();
-        let inner = group.encrypt_application_message(message, Vec::new())?;
-        Ok(LiteMessage { inner })
+        let mls_message = group.encrypt_application_message(message, Vec::new())?;
+        Ok(mls_message.into())
     }
 
     /// Process an inbound message for this group.
@@ -466,8 +467,8 @@ impl LiteGroup {
             // So perhaps we don't need it?
             ReceivedMessage::GroupInfo(_) => Ok(LiteReceivedMessage::GroupInfo),
             ReceivedMessage::Welcome => Ok(LiteReceivedMessage::Welcome),
-            ReceivedMessage::KeyPackage(inner) => {
-                let key_package = Arc::new(LiteKeyPackage { inner });
+            ReceivedMessage::KeyPackage(key_package) => {
+                let key_package = Arc::new(key_package.into());
                 Ok(LiteReceivedMessage::KeyPackage { key_package })
             }
         }
