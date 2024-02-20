@@ -81,6 +81,8 @@ pub struct TemporaryState {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct SignatureData {
+    #[serde(with = "hex::serde")]
+    pub signing_identity: Vec<u8>,
     pub cs: u16,
     #[serde(with = "hex::serde")]
     pub secret_key: Vec<u8>,
@@ -105,12 +107,12 @@ impl PlatformState {
 
     pub fn client(
         &self,
-        myself: SigningIdentity,
+        myself_identifier: &[u8],
         group_config: Option<GroupConfig>,
     ) -> Result<Client<impl MlsConfig>, MlsError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
-        let myself_sigkey = self
-            .get_sigkey(&myself)?
+        let myself_sig_data = self
+            .get_sig_data(myself_identifier)?
             .ok_or(MlsError::UnavailableSecret)?;
         let engine = self.get_sqlite_engine()?;
 
@@ -119,9 +121,9 @@ impl PlatformState {
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
             .signing_identity(
-                myself,
-                myself_sigkey.secret_key.into(),
-                myself_sigkey.cs.into(),
+                SigningIdentity::mls_decode(&mut &*myself_sig_data.signing_identity)?,
+                myself_sig_data.secret_key.into(),
+                myself_sig_data.cs.into(),
             );
 
         if let Some(config) = group_config {
@@ -135,34 +137,37 @@ impl PlatformState {
 
     pub fn insert_sigkey(
         &mut self,
+        myself_identifier: &[u8],
         myself: &SigningIdentity,
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
     ) -> Result<(), MlsError> {
         let signature_data = SignatureData {
+            signing_identity: myself.mls_encode_to_vec()?,
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself_identifier;
+
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
             .map_err(|_| MlsError::StorageError)?;
         let data = bincode::serialize(&signature_data).map_err(|_| MlsError::SerializationError)?;
+
         storage
             .insert(hex::encode(key), data)
             .map_err(|_| MlsError::StorageError)?;
         Ok(())
     }
 
-    pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<Option<SignatureData>, MlsError> {
+    pub fn get_sig_data(
+        &self,
+        myself_identifier: &[u8],
+    ) -> Result<Option<SignatureData>, MlsError> {
         // TODO: Not clear if the option is needed here, the underlying function needs it.
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself_identifier;
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
@@ -247,18 +252,18 @@ impl TemporaryState {
 
     pub fn insert_sigkey(
         &mut self,
+        myself_identifier: &[u8],
         myself: &SigningIdentity,
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
     ) -> Result<(), MlsError> {
         let signature_data = SignatureData {
+            signing_identity: myself.mls_encode_to_vec()?,
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = myself
-            .mls_encode_to_vec()
-            .map_err(|_| MlsError::EncodingError)?;
+        let key = myself_identifier.to_vec();
 
         self.sigkeys.insert(key, signature_data);
         // TODO: We could return the value to indicate if the key

@@ -15,7 +15,7 @@ fn main() -> Result<(), MlsError> {
         None,
     )?;
 
-    dbg!(hex::encode(&alice_signing_id.signature_key));
+    dbg!(String::from_utf8(alice_signing_id.clone()).unwrap());
 
     // Alice's key is stored in the DB
     /*let alice_signing_id = SigningIdentity::new(
@@ -47,7 +47,7 @@ fn main() -> Result<(), MlsError> {
         &mut state_alice,
         Some(group_config.clone()),
         None,
-        alice_signing_id.clone(),
+        &alice_signing_id,
     )?;
 
     dbg!("group created", hex::encode(&gid));
@@ -58,13 +58,13 @@ fn main() -> Result<(), MlsError> {
         &gid,
         Some(group_config.clone()),
         vec![bob_kp],
-        alice_signing_id.clone(),
+        &alice_signing_id,
     )?;
 
     mls_platform_api::mls_receive(
         &state_alice,
         &gid,
-        alice_signing_id.clone(),
+        &alice_signing_id,
         MlsMessageOrAck::Ack,
         Some(group_config.clone()),
     )?;
@@ -72,7 +72,7 @@ fn main() -> Result<(), MlsError> {
     // Bob joins
     mls_platform_api::mls_group_join(
         &state_bob,
-        bob_signing_id.clone(),
+        &bob_signing_id,
         Some(group_config.clone()),
         welcome,
         None,
@@ -82,7 +82,7 @@ fn main() -> Result<(), MlsError> {
     let ciphertext = mls_platform_api::mls_send(
         &state_bob,
         &gid,
-        bob_signing_id,
+        &bob_signing_id,
         Some(group_config.clone()),
         b"hello",
     )?;
@@ -90,7 +90,7 @@ fn main() -> Result<(), MlsError> {
     let message = mls_platform_api::mls_receive(
         &state_alice,
         &gid,
-        alice_signing_id.clone(),
+        &alice_signing_id,
         MlsMessageOrAck::MlsMessage(ciphertext),
         Some(group_config.clone()),
     )?;
@@ -98,7 +98,7 @@ fn main() -> Result<(), MlsError> {
     dbg!(format!("{message:?}"));
 
     let members =
-        mls_platform_api::mls_members(&state_alice, alice_signing_id, Some(group_config), &gid)?;
+        mls_platform_api::mls_members(&state_alice, &alice_signing_id, Some(group_config), &gid)?;
 
     dbg!(format!("{members:?}"));
 

@@ -4,7 +4,7 @@ use mls_rs::group::proposal::{CustomProposal, ProposalType};
 use mls_rs::group::{ExportedTree, ReceivedMessage};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
-use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
+use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList, IdentityProvider};
 
 pub use state::{PlatformState, TemporaryState};
 
@@ -132,7 +132,7 @@ pub fn mls_generate_signature_keypair(
     name: &str,
     cs: CipherSuite,
     _randomness: Option<Vec<u8>>,
-) -> Result<SigningIdentity, MlsError> {
+) -> Result<Vec<u8>, MlsError> {
     let crypto_provider = DefaultCryptoProvider::default();
     let cipher_suite = crypto_provider
         .cipher_suite_provider(cs)
@@ -149,12 +149,17 @@ pub fn mls_generate_signature_keypair(
     let signing_identity: SigningIdentity =
         SigningIdentity::new(credential.into_credential(), signature_pubkey);
 
+    let identifier = DefaultIdentityProvider::new()
+        .identity(&signing_identity, &Default::default())
+        .map_err(|_| MlsError::IdentityError)?;
+
     // Print the signature key
     println!("Signature Secret Key: {:?}", hex::encode(&signature_key));
 
     // Store the signature key pair.
-    let _ = state.insert_sigkey(&signing_identity, &signature_key, cs);
-    Ok(signing_identity)
+    let _ = state.insert_sigkey(&identifier, &signing_identity, &signature_key, cs);
+
+    Ok(identifier)
 }
 
 ///
@@ -162,12 +167,12 @@ pub fn mls_generate_signature_keypair(
 ///
 pub fn mls_generate_key_package(
     state: &PlatformState,
-    myself: SigningIdentity,
+    myself: Vec<u8>,
     group_config: Option<GroupConfig>,
     _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, MlsError> {
     // Create a client for that artificial state
-    let client = state.client(myself, group_config)?;
+    let client = state.client(&myself, group_config)?;
 
     // Generate a KeyPackage from that Client
     let key_package = client.generate_key_package_message()?;
@@ -179,7 +184,7 @@ pub fn mls_generate_key_package(
 ///
 pub fn mls_members(
     state: &PlatformState,
-    myself: SigningIdentity,
+    myself: &[u8],
     group_config: Option<GroupConfig>,
     gid: &GroupId,
 ) -> Result<(u64, Vec<(Identity, SigningIdentity)>), MlsError> {
@@ -221,7 +226,7 @@ pub fn mls_group_create(
     pstate: &mut PlatformState,
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
-    myself: SigningIdentity,
+    myself: &[u8],
     // psk: Option<Vec<u8>>, // See if we pass that here or in all Group operations
 ) -> Result<GroupId, MlsError> {
     // Build the client
@@ -259,7 +264,7 @@ pub fn mls_group_add(
     gid: &GroupId,
     group_config: Option<GroupConfig>,
     new_members: Vec<MlsMessage>,
-    myself: SigningIdentity,
+    myself: &[u8],
 ) -> Result<(MlsMessage, MlsMessage), MlsError> {
     // Get the group from the state
     let client = pstate.client(myself, group_config)?;
@@ -300,7 +305,7 @@ pub fn mls_group_remove(
     gid: GroupId,
     group_config: Option<GroupConfig>,
     removed: SigningIdentity,
-    myself: SigningIdentity,
+    myself: &[u8],
 ) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
@@ -319,8 +324,9 @@ pub fn mls_group_propose_remove(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
+    // TODO make this identifier
     removed: SigningIdentity,
-    myself: SigningIdentity,
+    myself: &[u8],
 ) -> Result<MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
 
@@ -343,7 +349,7 @@ pub fn mls_group_propose_remove(
 pub fn mls_update(
     gid: GroupId,
     pstate: &mut PlatformState,
-    myself: SigningIdentity,
+    myself: &[u8],
     _rng: Option<[u8; 32]>,
 ) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
@@ -362,7 +368,7 @@ pub fn mls_update(
 
 pub fn mls_group_join(
     pstate: &PlatformState,
-    myself: SigningIdentity,
+    myself: &[u8],
     group_config: Option<GroupConfig>,
     welcome: MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
@@ -385,7 +391,7 @@ pub fn mls_group_propose_leave(
     pstate: PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
-    myself: SigningIdentity,
+    myself: &[u8],
 ) -> Result<mls_rs::MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
     let self_index = group.current_member_index();
@@ -403,7 +409,7 @@ pub fn mls_group_close(
     pstate: PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
-    myself: SigningIdentity,
+    myself: &[u8],
 ) -> Result<mls_rs::MlsMessage, MlsError> {
     // Remove everyone from the group.
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
@@ -445,7 +451,7 @@ pub fn mls_group_close(
 pub fn mls_receive(
     pstate: &PlatformState,
     gid: &GroupId,
-    myself: SigningIdentity,
+    myself: &[u8],
     message_or_ack: MlsMessageOrAck,
     group_config: Option<GroupConfig>,
 ) -> Result<ReceivedMessage, MlsError> {
@@ -470,7 +476,7 @@ pub fn mls_send_custom_proposal(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
-    myself: SigningIdentity,
+    myself: &[u8],
     proposal_type: ProposalType,
     data: Vec<u8>,
 ) -> Result<mls_rs::MlsMessage, MlsError> {
@@ -488,7 +494,7 @@ pub fn mls_send_groupcontextextension(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
-    myself: SigningIdentity,
+    myself: &[u8],
     new_gce: Vec<Extension>,
 ) -> Result<mls_rs::MlsMessage, MlsError> {
     let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
@@ -508,7 +514,7 @@ pub fn mls_send_groupcontextextension(
 pub fn mls_send(
     pstate: &PlatformState,
     gid: &GroupId,
-    myself: SigningIdentity,
+    myself: &[u8],
     group_config: Option<GroupConfig>,
     message: &[u8],
 ) -> Result<MlsMessage, MlsError> {
@@ -526,7 +532,7 @@ pub fn mls_send(
 pub fn mls_export(
     pstate: &PlatformState,
     gid: &GroupId,
-    myself: SigningIdentity,
+    myself: &[u8],
     group_config: Option<GroupConfig>,
     label: &[u8],   // fixed by IANA registry
     context: &[u8], // arbitrary
