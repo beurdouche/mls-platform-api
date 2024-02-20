@@ -1,7 +1,21 @@
 [workspace]
 resolver = "2"
 members = [
-#  "mls-platform-api",
+  "mls-platform-api",
   "mls-lite",
   "uniffi-bindgen",
 ]
+
+[patch.crates-io]
+#mls-rs = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+#mls-rs-core = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+#mls-rs-crypto-openssl = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+#mls-rs-crypto-rustcrypto = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+#mls-rs-provider-sqlite = { git = "https://github.com/mgeisler/mls-rs", branch = "uniffi" }
+
+mls-rs = { path = "../mls-rs/mls-rs" }
+mls-rs-core = { path = "../mls-rs/mls-rs-core" }
+mls-rs-crypto-openssl = { path = "../mls-rs/mls-rs-crypto-openssl" }
+mls-rs-crypto-rustcrypto = { path = "../mls-rs/mls-rs-crypto-rustcrypto" }
+mls-rs-provider-sqlite = { path = "../mls-rs/mls-rs-provider-sqlite" }
+uniffi = { path = "../uniffi-rs/uniffi" }

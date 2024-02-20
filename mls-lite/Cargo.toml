@@ -9,7 +9,7 @@ name = "mls_lite"
 
 [features]
 default = ["uniffi"]
-uniffi = ["dep:uniffi"]
+uniffi = ["dep:uniffi", "mls-rs/uniffi", "mls-rs-core/uniffi"]
 
 [dependencies]
 mls-rs = "0.38"
