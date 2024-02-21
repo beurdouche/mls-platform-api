@@ -279,10 +279,12 @@ impl TemporaryState {
     }
 }
 
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+#[cfg_attr(mls_build_async, maybe_async::must_be_async)]
 impl GroupStateStorage for TemporaryState {
     type Error = mls_rs::mls_rs_codec::Error;
 
-    fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
+    async fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
         let group_locked = self.groups.lock().unwrap();
 
         Ok(group_locked
@@ -290,7 +292,7 @@ impl GroupStateStorage for TemporaryState {
             .and_then(|group_data| group_data.epoch_data.keys().max().copied()))
     }
 
-    fn state<T>(&self, group_id: &[u8]) -> Result<Option<T>, Self::Error>
+    async fn state<T>(&self, group_id: &[u8]) -> Result<Option<T>, Self::Error>
     where
         T: GroupState + MlsDecode,
     {
@@ -303,7 +305,7 @@ impl GroupStateStorage for TemporaryState {
             .map_err(Into::into)
     }
 
-    fn epoch<T>(&self, group_id: &[u8], epoch_id: u64) -> Result<Option<T>, Self::Error>
+    async fn epoch<T>(&self, group_id: &[u8], epoch_id: u64) -> Result<Option<T>, Self::Error>
     where
         T: EpochRecord + MlsEncode + MlsDecode,
     {
@@ -317,7 +319,7 @@ impl GroupStateStorage for TemporaryState {
             .map_err(Into::into)
     }
 
-    fn write<ST, ET>(
+    async fn write<ST, ET>(
         &mut self,
         state: ST,
         epoch_inserts: Vec<ET>,
@@ -359,10 +361,12 @@ impl GroupStateStorage for TemporaryState {
     }
 }
 
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+#[cfg_attr(mls_build_async, maybe_async::must_be_async)]
 impl KeyPackageStorage for TemporaryState {
     type Error = mls_rs::mls_rs_codec::Error;
 
-    fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
+    async fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
         // Convert KeyPackageData to KeyPackageData2
         let pkg2 = KeyPackageData2 {
             key_package_data: pkg,
@@ -373,7 +377,7 @@ impl KeyPackageStorage for TemporaryState {
         Ok(())
     }
 
-    fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
+    async fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
         let states = self.key_packages.lock().unwrap();
         // Retrieve KeyPackageData2 and convert it to KeyPackageData
         match states.get(id) {
@@ -382,7 +386,7 @@ impl KeyPackageStorage for TemporaryState {
         }
     }
 
-    fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
+    async fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
         let mut states = self.key_packages.lock().unwrap();
         states.remove(id);
         Ok(())
