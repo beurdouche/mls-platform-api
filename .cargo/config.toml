@@ -1,0 +1,3 @@
+[build]
+rustflags = ["--cfg", "mls_build_async"]
+

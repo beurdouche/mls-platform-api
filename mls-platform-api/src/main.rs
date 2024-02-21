@@ -1,7 +1,9 @@
 use mls_platform_api::MlsError;
 use mls_platform_api::MlsMessageOrAck;
 
-fn main() -> Result<(), MlsError> {
+#[cfg_attr(mls_build_async, tokio::main)]
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+async fn main() -> Result<(), MlsError> {
     let group_config = mls_platform_api::GroupConfig::default();
 
     let mut state_alice = mls_platform_api::state("alice".into(), [0u8; 32])?;
@@ -13,7 +15,8 @@ fn main() -> Result<(), MlsError> {
         "alice",
         group_config.ciphersuite,
         None,
-    )?;
+    )
+    .await?;
 
     dbg!(String::from_utf8(alice_signing_id.clone()).unwrap());
 
@@ -30,7 +33,8 @@ fn main() -> Result<(), MlsError> {
         "bob",
         group_config.ciphersuite,
         None,
-    )?;
+    )
+    .await?;
 
     // Create key package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(
@@ -38,7 +42,8 @@ fn main() -> Result<(), MlsError> {
         bob_signing_id.clone(),
         Some(group_config.clone()),
         None,
-    )?;
+    )
+    .await?;
 
     dbg!(format!("{bob_kp:?}"));
 
@@ -48,7 +53,8 @@ fn main() -> Result<(), MlsError> {
         Some(group_config.clone()),
         None,
         &alice_signing_id,
-    )?;
+    )
+    .await?;
 
     dbg!("group created", hex::encode(&gid));
 
@@ -59,7 +65,8 @@ fn main() -> Result<(), MlsError> {
         Some(group_config.clone()),
         vec![bob_kp],
         &alice_signing_id,
-    )?;
+    )
+    .await?;
 
     mls_platform_api::mls_receive(
         &state_alice,
@@ -67,7 +74,8 @@ fn main() -> Result<(), MlsError> {
         &alice_signing_id,
         MlsMessageOrAck::Ack,
         Some(group_config.clone()),
-    )?;
+    )
+    .await?;
 
     // Bob joins
     mls_platform_api::mls_group_join(
@@ -76,7 +84,8 @@ fn main() -> Result<(), MlsError> {
         Some(group_config.clone()),
         welcome,
         None,
-    )?;
+    )
+    .await?;
 
     // Bob sends message to alice
     let ciphertext = mls_platform_api::mls_send(
@@ -85,7 +94,8 @@ fn main() -> Result<(), MlsError> {
         &bob_signing_id,
         Some(group_config.clone()),
         b"hello",
-    )?;
+    )
+    .await?;
 
     let message = mls_platform_api::mls_receive(
         &state_alice,
@@ -93,12 +103,14 @@ fn main() -> Result<(), MlsError> {
         &alice_signing_id,
         MlsMessageOrAck::MlsMessage(ciphertext),
         Some(group_config.clone()),
-    )?;
+    )
+    .await?;
 
     dbg!(format!("{message:?}"));
 
     let members =
-        mls_platform_api::mls_members(&state_alice, &alice_signing_id, Some(group_config), &gid)?;
+        mls_platform_api::mls_members(&state_alice, &alice_signing_id, Some(group_config), &gid)
+            .await?;
 
     dbg!(format!("{members:?}"));
 

@@ -128,7 +128,8 @@ pub fn mls_generate_credential(name: &str) -> Result<BasicCredential, MlsError> 
 ///
 /// Generate a Signature Keypair
 ///
-pub fn mls_generate_signature_keypair(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_generate_signature_keypair(
     state: &mut PlatformState,
     name: &str,
     cs: CipherSuite,
@@ -142,6 +143,7 @@ pub fn mls_generate_signature_keypair(
     // Generate a signature key pair.
     let (signature_key, signature_pubkey) = cipher_suite
         .signature_key_generate()
+        .await
         .map_err(|_| MlsError::UnsupportedCiphersuite)?;
 
     // Create the credential and the signing identity.
@@ -152,6 +154,7 @@ pub fn mls_generate_signature_keypair(
 
     let identifier = DefaultIdentityProvider::new()
         .identity(&signing_identity, &Default::default())
+        .await
         .map_err(|e| MlsError::IdentityError(e.into_any_error()))?;
 
     // Print the signature key
@@ -166,7 +169,8 @@ pub fn mls_generate_signature_keypair(
 ///
 /// Generate a KeyPackage.
 ///
-pub fn mls_generate_key_package(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_generate_key_package(
     state: &PlatformState,
     myself: Vec<u8>,
     group_config: Option<GroupConfig>,
@@ -176,14 +180,15 @@ pub fn mls_generate_key_package(
     let client = state.client(&myself, group_config)?;
 
     // Generate a KeyPackage from that Client
-    let key_package = client.generate_key_package_message()?;
+    let key_package = client.generate_key_package_message().await?;
     Ok(key_package)
 }
 
 ///
 /// Get group members.
 ///
-pub fn mls_members(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_members(
     state: &PlatformState,
     myself: &[u8],
     group_config: Option<GroupConfig>,
@@ -194,14 +199,14 @@ pub fn mls_members(
         .clone()
         .ok_or(MlsError::UnsupportedGroupConfig)?;
     let cs = gc.ciphersuite;
-    let group = state.client(myself, group_config)?.load_group(gid)?;
+    let group = state.client(myself, group_config)?.load_group(gid).await?;
     let epoch = group.current_epoch();
 
-    let members = group
-        .roster()
-        .member_identities_iter()
-        .map(|identity| Ok((mls_identity(identity, cs)?, identity.clone())))
-        .collect::<Result<Vec<_>, MlsError>>()?;
+    let mut members = vec![];
+
+    for identity in group.roster().member_identities_iter() {
+        members.push((mls_identity(identity, cs).await?, identity.clone()));
+    }
 
     Ok((epoch, members))
 }
@@ -209,7 +214,8 @@ pub fn mls_members(
 ///
 /// Get the Identity from a SigningIdentity.
 ///
-pub fn mls_identity(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_identity(
     signing_identity: &SigningIdentity,
     cs: CipherSuite,
 ) -> Result<Identity, MlsError> {
@@ -217,6 +223,7 @@ pub fn mls_identity(
         .cipher_suite_provider(cs)
         .ok_or(MlsError::UnsupportedCiphersuite)?
         .hash(&signing_identity.mls_encode_to_vec()?)
+        .await
         .map(Identity)
         .map_err(|e| MlsError::IdentityError(e.into_any_error()))
 }
@@ -224,7 +231,8 @@ pub fn mls_identity(
 ///
 /// Group management: Create a Group
 ///
-pub fn mls_group_create(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_create(
     pstate: &mut PlatformState,
     group_config: Option<GroupConfig>,
     gid: Option<GroupId>,
@@ -242,16 +250,16 @@ pub fn mls_group_create(
 
     // Generate a GroupId if none is provided
     let mut group = match gid {
-        Some(gid) => client.create_group_with_id(gid, gce)?,
-        None => client.create_group(gce)?,
+        Some(gid) => client.create_group_with_id(gid, gce).await?,
+        None => client.create_group(gce).await?,
     };
 
     // Create the group
-    group.commit(Vec::new())?;
-    group.apply_pending_commit()?;
+    group.commit(Vec::new()).await?;
+    group.apply_pending_commit().await?;
 
     // The state needs to be returned or stored somewhere
-    group.write_to_storage()?;
+    group.write_to_storage().await?;
     let gid = group.group_id().to_vec();
 
     // Return
@@ -261,7 +269,8 @@ pub fn mls_group_create(
 ///
 /// Group management: Adding a user.
 ///
-pub fn mls_group_add(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
     group_config: Option<GroupConfig>,
@@ -270,21 +279,22 @@ pub fn mls_group_add(
 ) -> Result<(MlsMessage, MlsMessage), MlsError> {
     // Get the group from the state
     let client = pstate.client(myself, group_config)?;
-    let mut group = client.load_group(gid)?;
+    let mut group = client.load_group(gid).await?;
 
     let mut commit = new_members
         .into_iter()
         .try_fold(group.commit_builder(), |commit_builder, user| {
             commit_builder.add_member(user)
         })?
-        .build()?;
+        .build()
+        .await?;
 
     // We use the default mode which returns only one welcome message
     let welcome = commit.welcome_messages.remove(0);
     let commit = commit.commit_message;
 
     // Write the group to the storage
-    group.write_to_storage()?;
+    group.write_to_storage().await?;
 
     Ok((commit, welcome))
 }
@@ -302,14 +312,18 @@ pub fn mls_group_propose_add(
 ///
 /// Group management: Removing a user.
 ///
-pub fn mls_group_remove(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_remove(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
     removed: SigningIdentity,
     myself: &[u8],
 ) -> Result<MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let mut group = pstate
+        .client(myself, group_config)?
+        .load_group(&gid)
+        .await?;
 
     let removed = group
         .roster()
@@ -317,12 +331,17 @@ pub fn mls_group_remove(
         .find_map(|m| (m.signing_identity == removed).then_some(m.index))
         .ok_or(MlsError::UndefinedSigningIdentity)?;
 
-    let commit = group.commit_builder().remove_member(removed)?.build()?;
+    let commit = group
+        .commit_builder()
+        .remove_member(removed)?
+        .build()
+        .await?;
 
     Ok(commit.commit_message)
 }
 
-pub fn mls_group_propose_remove(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_propose_remove(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
@@ -330,7 +349,10 @@ pub fn mls_group_propose_remove(
     removed: SigningIdentity,
     myself: &[u8],
 ) -> Result<MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let mut group = pstate
+        .client(myself, group_config)?
+        .load_group(&gid)
+        .await?;
 
     let removed = group
         .roster()
@@ -338,7 +360,7 @@ pub fn mls_group_propose_remove(
         .find_map(|m| (m.signing_identity == removed).then_some(m.index))
         .ok_or(MlsError::UndefinedSigningIdentity)?;
 
-    let proposal = group.propose_remove(removed, vec![])?;
+    let proposal = group.propose_remove(removed, vec![]).await?;
 
     Ok(proposal)
 }
@@ -348,7 +370,8 @@ pub fn mls_group_propose_remove(
 ///
 
 /// Possibly add a random nonce as an optional parameter.
-pub fn mls_update(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_update(
     gid: GroupId,
     pstate: &mut PlatformState,
     myself: &[u8],
@@ -356,10 +379,10 @@ pub fn mls_update(
 ) -> Result<MlsMessage, MlsError> {
     // Propose + Commit
     let client = pstate.client(myself, None)?;
-    let mut group = client.load_group(&gid)?;
-    let commit = group.commit(vec![])?;
+    let mut group = client.load_group(&gid).await?;
+    let commit = group.commit(vec![]).await?;
 
-    group.write_to_storage()?;
+    group.write_to_storage().await?;
 
     Ok(commit.commit_message)
 }
@@ -367,8 +390,8 @@ pub fn mls_update(
 ///
 /// Process Welcome message.
 ///
-
-pub fn mls_group_join(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_join(
     pstate: &PlatformState,
     myself: &[u8],
     group_config: Option<GroupConfig>,
@@ -376,11 +399,11 @@ pub fn mls_group_join(
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<Vec<u8>, MlsError> {
     let client = pstate.client(myself, group_config)?;
-    let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
+    let (mut group, _info) = client.join_group(ratchet_tree, welcome).await?;
     let gid = group.group_id().to_vec();
 
     // Store the state
-    group.write_to_storage()?;
+    group.write_to_storage().await?;
 
     // Return the group identifier
     Ok(gid)
@@ -390,15 +413,20 @@ pub fn mls_group_join(
 /// Leave a group.
 ///
 // TODO: Do we keep this ?
-pub fn mls_group_propose_leave(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_propose_leave(
     pstate: PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
     myself: &[u8],
 ) -> Result<mls_rs::MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let mut group = pstate
+        .client(myself, group_config)?
+        .load_group(&gid)
+        .await?;
+
     let self_index = group.current_member_index();
-    let proposal = group.propose_remove(self_index, vec![])?;
+    let proposal = group.propose_remove(self_index, vec![]).await?;
 
     Ok(proposal)
 }
@@ -408,14 +436,18 @@ pub fn mls_group_propose_leave(
 ///
 
 // TODO would this be better with a custom proposal? <- Yes.
-pub fn mls_group_close(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_group_close(
     pstate: PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
     myself: &[u8],
 ) -> Result<mls_rs::MlsMessage, MlsError> {
     // Remove everyone from the group.
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let mut group = pstate
+        .client(myself, group_config)?
+        .load_group(&gid)
+        .await?;
     let self_index = group.current_member_index();
 
     let all_but_me = group
@@ -429,7 +461,8 @@ pub fn mls_group_close(
         .try_fold(group.commit_builder(), |builder, index| {
             builder.remove_member(index)
         })?
-        .build()?;
+        .build()
+        .await?;
 
     // TODO we should delete state when we receive an ACK. but it's not super clear how to
     // determine on receive that this was a "close" commit. Would be easier if we had a custom
@@ -451,7 +484,8 @@ pub fn mls_group_close(
 ///  - An application message will result in it being decrypted.
 ///
 
-pub fn mls_receive(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_receive(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &[u8],
@@ -459,11 +493,14 @@ pub fn mls_receive(
     group_config: Option<GroupConfig>,
 ) -> Result<Vec<u8>, MlsError> {
     // TODO: Do we need the GID as input since it is in the message framing ?
-    let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
+    let mut group = pstate.client(myself, group_config)?.load_group(gid).await?;
 
     let out = match message_or_ack {
-        MlsMessageOrAck::Ack => group.apply_pending_commit().map(ReceivedMessage::Commit),
-        MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message),
+        MlsMessageOrAck::Ack => group
+            .apply_pending_commit()
+            .await
+            .map(ReceivedMessage::Commit),
+        MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message).await,
     };
 
     //
@@ -476,7 +513,7 @@ pub fn mls_receive(
     };
 
     // Write the state to storage
-    group.write_to_storage()?;
+    group.write_to_storage().await?;
 
     Ok(result)
 }
@@ -484,7 +521,8 @@ pub fn mls_receive(
 ///
 /// Create and send a custom proposal.
 ///
-pub fn mls_send_custom_proposal(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_send_custom_proposal(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
@@ -492,9 +530,13 @@ pub fn mls_send_custom_proposal(
     proposal_type: ProposalType,
     data: Vec<u8>,
 ) -> Result<mls_rs::MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let mut group = pstate
+        .client(myself, group_config)?
+        .load_group(&gid)
+        .await?;
+
     let custom_proposal = CustomProposal::new(proposal_type, data);
-    let proposal = group.propose_custom(custom_proposal, vec![])?;
+    let proposal = group.propose_custom(custom_proposal, vec![]).await?;
 
     Ok(proposal)
 }
@@ -502,19 +544,24 @@ pub fn mls_send_custom_proposal(
 ///
 /// Propose + Commit a GroupContextExtension
 ///
-pub fn mls_send_groupcontextextension(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_send_groupcontextextension(
     pstate: &PlatformState,
     gid: GroupId,
     group_config: Option<GroupConfig>,
     myself: &[u8],
     new_gce: Vec<Extension>,
 ) -> Result<mls_rs::MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let mut group = pstate
+        .client(myself, group_config)?
+        .load_group(&gid)
+        .await?;
 
     let commit = group
         .commit_builder()
         .set_group_context_ext(new_gce.into())?
-        .build()?;
+        .build()
+        .await?;
 
     Ok(commit.commit_message)
 }
@@ -523,17 +570,18 @@ pub fn mls_send_groupcontextextension(
 // Encrypt a message.
 //
 
-pub fn mls_send(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_send(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &[u8],
     group_config: Option<GroupConfig>,
     message: &[u8],
 ) -> Result<MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
+    let mut group = pstate.client(myself, group_config)?.load_group(gid).await?;
 
-    let out = group.encrypt_application_message(message, vec![])?;
-    group.write_to_storage()?;
+    let out = group.encrypt_application_message(message, vec![]).await?;
+    group.write_to_storage().await?;
 
     Ok(out)
 }
@@ -541,7 +589,8 @@ pub fn mls_send(
 ///
 /// Export a group secret.
 ///
-pub fn mls_export(
+#[cfg_attr(not(mls_build_async), maybe_async::must_be_sync)]
+pub async fn mls_export(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &[u8],
@@ -552,8 +601,8 @@ pub fn mls_export(
     _epoch_number: Option<u32>,
 ) -> Result<(Vec<u8>, u32), MlsError> {
     // KDF of the secret of the current epoch.
-    let group = pstate.client(myself, group_config)?.load_group(gid)?;
-    let secret = group.export_secret(label, context, len)?.to_vec();
+    let group = pstate.client(myself, group_config)?.load_group(gid).await?;
+    let secret = group.export_secret(label, context, len).await?.to_vec();
 
     // TODO what is the second tuple element? <- Epoch number
     Ok((secret, 0))
