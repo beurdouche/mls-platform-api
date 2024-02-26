@@ -64,7 +64,7 @@ pub enum MlsError {
 ///
 /// Generate or Retrieve a PlatformState.
 ///
-pub fn state(db_path: String, db_key: [u8; 32]) -> Result<PlatformState, MlsError> {
+pub fn state_access(db_path: String, db_key: [u8; 32]) -> Result<PlatformState, MlsError> {
     PlatformState::new(db_path, db_key)
 }
 
@@ -172,9 +172,6 @@ pub fn mls_members(
     group_config: Option<GroupConfig>,
     gid: &GroupId,
 ) -> Result<(u64, Vec<(Identity, SigningIdentity)>), MlsError> {
-    // let gc = group_config
-    //     .clone()
-    //     .ok_or(MlsError::UnsupportedGroupConfig)?;
     let group = state.client(myself, group_config)?.load_group(gid)?;
     let epoch = group.current_epoch();
 
@@ -333,7 +330,7 @@ pub fn mls_group_propose_remove(
 ///
 
 /// Possibly add a random nonce as an optional parameter.
-pub fn mls_update(
+pub fn mls_group_update(
     pstate: &mut PlatformState,
     gid: GroupId,
     myself: &Identity,
@@ -466,22 +463,23 @@ pub fn mls_receive(
     Ok(result)
 }
 
-///
-/// Create and send a custom proposal.
-///
-pub fn mls_send_custom_proposal(
-    pstate: &PlatformState,
-    gid: GroupId,
-    myself: &Identity,
-    proposal_type: ProposalType,
-    data: Vec<u8>,
-    group_config: Option<GroupConfig>,
-) -> Result<mls_rs::MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
-    let custom_proposal = CustomProposal::new(proposal_type, data);
-    let proposal = group.propose_custom(custom_proposal, vec![])?;
+//
+// Encrypt a message.
+//
 
-    Ok(proposal)
+pub fn mls_send(
+    pstate: &PlatformState,
+    gid: &GroupId,
+    myself: &Identity,
+    message: &[u8],
+    group_config: Option<GroupConfig>,
+) -> Result<MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
+
+    let out = group.encrypt_application_message(message, vec![])?;
+    group.write_to_storage()?;
+
+    Ok(out)
 }
 
 ///
@@ -504,23 +502,22 @@ pub fn mls_send_groupcontextextension(
     Ok(commit.commit_message)
 }
 
-//
-// Encrypt a message.
-//
-
-pub fn mls_send(
+///
+/// Create and send a custom proposal.
+///
+pub fn mls_send_custom_proposal(
     pstate: &PlatformState,
-    gid: &GroupId,
+    gid: GroupId,
     myself: &Identity,
-    message: &[u8],
+    proposal_type: ProposalType,
+    data: Vec<u8>,
     group_config: Option<GroupConfig>,
-) -> Result<MlsMessage, MlsError> {
-    let mut group = pstate.client(myself, group_config)?.load_group(gid)?;
+) -> Result<mls_rs::MlsMessage, MlsError> {
+    let mut group = pstate.client(myself, group_config)?.load_group(&gid)?;
+    let custom_proposal = CustomProposal::new(proposal_type, data);
+    let proposal = group.propose_custom(custom_proposal, vec![])?;
 
-    let out = group.encrypt_application_message(message, vec![])?;
-    group.write_to_storage()?;
-
-    Ok(out)
+    Ok(proposal)
 }
 
 ///
