@@ -530,13 +530,15 @@ pub fn mls_export(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-    label: &[u8],   // fixed by IANA registry
-    context: &[u8], // arbitrary
-    len: usize,     // exporting from past epoch is not supported because we didn't see use cases
+    label: &[u8],
+    context: &[u8],
+    len: u64,
     group_config: Option<GroupConfig>,
     // TODO: epoch_number: Option<u64>, this is not supported in the current version of mls-rs
 ) -> Result<(Vec<u8>, u64), MlsError> {
     let group = pstate.client(myself, group_config)?.load_group(gid)?;
-    let secret = group.export_secret(label, context, len)?.to_vec();
+    let secret = group
+        .export_secret(label, context, (len as u64).try_into().unwrap())?
+        .to_vec();
     Ok((secret, group.current_epoch()))
 }
