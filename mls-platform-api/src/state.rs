@@ -8,10 +8,11 @@ use mls_rs::{
     client_builder::MlsConfig,
     crypto::SignatureSecretKey,
     error::IntoAnyError,
+    group::Capabilities,
     identity::SigningIdentity,
     mls_rs_codec::{MlsDecode, MlsEncode},
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
-    CipherSuite, Client, GroupStateStorage, KeyPackageStorage,
+    CipherSuite, Client, ExtensionList, GroupStateStorage, KeyPackageStorage, ProtocolVersion,
 };
 use mls_rs_provider_sqlite::{
     connection_strategy::{
@@ -22,7 +23,7 @@ use mls_rs_provider_sqlite::{
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{GroupConfig, MlsError};
+use crate::{GroupConfig, PlatformError};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GroupData {
@@ -90,35 +91,39 @@ pub struct SignatureData {
 }
 
 impl PlatformState {
-    pub fn new(db_path: String, db_key: [u8; 32]) -> Result<Self, MlsError> {
+    pub fn new(db_path: String, db_key: [u8; 32]) -> Result<Self, PlatformError> {
         let state = Self { db_path, db_key };
 
         // This will create an empty database if it doesn't exist.
         state
             .get_sqlite_engine()?
             .application_data_storage()
-            .map_err(|e| (MlsError::StorageError(e.into_any_error())))?;
+            .map_err(|e| (PlatformError::StorageError(e.into_any_error())))?;
 
         Ok(state)
     }
 
-    pub fn get_signing_identities(&self) -> Result<Vec<SigningIdentity>, MlsError> {
+    pub fn get_signing_identities(&self) -> Result<Vec<SigningIdentity>, PlatformError> {
         todo!();
     }
 
     pub fn client(
         &self,
         myself_identifier: &[u8],
-        group_config: Option<GroupConfig>,
-    ) -> Result<Client<impl MlsConfig>, MlsError> {
+        version: ProtocolVersion,
+        key_package_extensions: Option<ExtensionList>,
+        leaf_node_extensions: Option<ExtensionList>,
+        group_context_extensions: Option<ExtensionList>,
+        capabilities: Option<Capabilities>,
+    ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
         let myself_sig_data = self
             .get_sig_data(myself_identifier)?
-            .ok_or(MlsError::UnavailableSecret)?;
+            .ok_or(PlatformError::UnavailableSecret)?;
         let engine = self.get_sqlite_engine()?;
 
         let mut builder = mls_rs::client_builder::ClientBuilder::new_sqlite(engine)
-            .map_err(|e| MlsError::StorageError(e.into_any_error()))?
+            .map_err(|e| PlatformError::StorageError(e.into_any_error()))?
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
             .signing_identity(
@@ -127,13 +132,26 @@ impl PlatformState {
                 myself_sig_data.cs.into(),
             );
 
-        if let Some(config) = group_config {
+        if let Some(key_package_extensions) = key_package_extensions {
             builder = builder
-                .key_package_extensions(config.options)
-                .protocol_version(config.version);
-        }
-
+                .key_package_extensions(key_package_extensions)
+                .protocol_version(version);
+        };
         Ok(builder.build())
+    }
+
+    pub fn client_default(
+        &self,
+        myself_identifier: &[u8],
+    ) -> Result<Client<impl MlsConfig>, PlatformError> {
+        self.client(
+            myself_identifier,
+            ProtocolVersion::MLS_10,
+            None,
+            None,
+            None,
+            None,
+        )
     }
 
     pub fn insert_sigkey(
@@ -142,7 +160,7 @@ impl PlatformState {
         myself: &SigningIdentity,
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
-    ) -> Result<(), MlsError> {
+    ) -> Result<(), PlatformError> {
         let signature_data = SignatureData {
             signing_identity: myself.mls_encode_to_vec()?,
             cs: *cs,
@@ -154,29 +172,29 @@ impl PlatformState {
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
-            .map_err(|e| MlsError::StorageError(e.into_any_error()))?;
+            .map_err(|e| PlatformError::StorageError(e.into_any_error()))?;
         let data = bincode::serialize(&signature_data)?;
 
         storage
             .insert(hex::encode(key), data)
-            .map_err(|e| MlsError::StorageError(e.into_any_error()))?;
+            .map_err(|e| PlatformError::StorageError(e.into_any_error()))?;
         Ok(())
     }
 
     pub fn get_sig_data(
         &self,
         myself_identifier: &[u8],
-    ) -> Result<Option<SignatureData>, MlsError> {
+    ) -> Result<Option<SignatureData>, PlatformError> {
         // TODO: Not clear if the option is needed here, the underlying function needs it.
         let key = myself_identifier;
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
-            .map_err(|e| MlsError::StorageError(e.into_any_error()))?;
+            .map_err(|e| PlatformError::StorageError(e.into_any_error()))?;
 
         storage
             .get(&hex::encode(key))
-            .map_err(|e| MlsError::StorageError(e.into_any_error()))?
+            .map_err(|e| PlatformError::StorageError(e.into_any_error()))?
             .map_or_else(
                 || Ok(None),
                 |data| bincode::deserialize(&data).map(Some).map_err(Into::into),
@@ -185,7 +203,7 @@ impl PlatformState {
 
     fn get_sqlite_engine(
         &self,
-    ) -> Result<SqLiteDataStorageEngine<impl ConnectionStrategy>, MlsError> {
+    ) -> Result<SqLiteDataStorageEngine<impl ConnectionStrategy>, PlatformError> {
         let path = Path::new(&self.db_path);
         let file_conn = FileConnectionStrategy::new(path);
 
@@ -193,10 +211,10 @@ impl PlatformState {
         let cipher_conn = CipheredConnectionStrategy::new(file_conn, cipher_config);
 
         SqLiteDataStorageEngine::new(cipher_conn)
-            .map_err(|e| MlsError::StorageError(e.into_any_error()))
+            .map_err(|e| PlatformError::StorageError(e.into_any_error()))
     }
 
-    pub fn delete(db_path: String) -> Result<(), MlsError> {
+    pub fn delete(db_path: String) -> Result<(), PlatformError> {
         let path = Path::new(&db_path);
 
         if path.exists() {
@@ -212,11 +230,11 @@ impl TemporaryState {
         Default::default()
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, MlsError> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, PlatformError> {
         bincode::serialize(self).map_err(Into::into)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, MlsError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PlatformError> {
         bincode::deserialize(bytes).map_err(Into::into)
     }
 
@@ -224,7 +242,7 @@ impl TemporaryState {
         &self,
         myself: SigningIdentity,
         group_config: Option<GroupConfig>,
-    ) -> Result<Client<impl MlsConfig>, MlsError> {
+    ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
         let myself_sigkey = self.get_sigkey(&myself)?;
 
@@ -254,7 +272,7 @@ impl TemporaryState {
         myself: &SigningIdentity,
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
-    ) -> Result<(), MlsError> {
+    ) -> Result<(), PlatformError> {
         let signature_data = SignatureData {
             signing_identity: myself.mls_encode_to_vec()?,
             cs: *cs,
@@ -269,13 +287,13 @@ impl TemporaryState {
         Ok(())
     }
 
-    pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<SignatureData, MlsError> {
+    pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<SignatureData, PlatformError> {
         let key = myself.mls_encode_to_vec()?;
 
         self.sigkeys
             .get(&key)
             .cloned()
-            .ok_or(MlsError::UnavailableSecret)
+            .ok_or(PlatformError::UnavailableSecret)
     }
 }
 
