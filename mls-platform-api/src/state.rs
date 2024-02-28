@@ -1,5 +1,6 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    convert::identity,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -14,6 +15,11 @@ use mls_rs::{
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
     CipherSuite, Client, ExtensionList, GroupStateStorage, KeyPackageStorage, ProtocolVersion,
 };
+
+use mls_rs::CipherSuiteProvider;
+use mls_rs::CryptoProvider;
+use mls_rs_crypto_rustcrypto;
+
 use mls_rs_provider_sqlite::{
     connection_strategy::{
         CipheredConnectionStrategy, ConnectionStrategy, FileConnectionStrategy, SqlCipherConfig,
@@ -23,7 +29,7 @@ use mls_rs_provider_sqlite::{
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{GroupConfig, PlatformError};
+use crate::{GroupConfig, Identity, PlatformError};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GroupData {
@@ -84,7 +90,9 @@ pub struct TemporaryState {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct SignatureData {
     #[serde(with = "hex::serde")]
-    pub signing_identity: Vec<u8>,
+    pub identifier: Vec<u8>,
+    #[serde(with = "hex::serde")]
+    pub public_key: Vec<u8>,
     pub cs: u16,
     #[serde(with = "hex::serde")]
     pub secret_key: Vec<u8>,
@@ -103,7 +111,7 @@ impl PlatformState {
         Ok(state)
     }
 
-    pub fn get_signing_identities(&self) -> Result<Vec<SigningIdentity>, PlatformError> {
+    pub fn get_signing_identities(&self) -> Result<Vec<Identity>, PlatformError> {
         todo!();
     }
 
@@ -126,11 +134,7 @@ impl PlatformState {
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))?
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
-            .signing_identity(
-                SigningIdentity::mls_decode(&mut &*myself_sig_data.signing_identity)?,
-                myself_sig_data.secret_key.into(),
-                myself_sig_data.cs.into(),
-            );
+            .signer(myself_sig_data.secret_key.into());
 
         if let Some(key_package_extensions) = key_package_extensions {
             builder = builder
@@ -156,18 +160,32 @@ impl PlatformState {
 
     pub fn insert_sigkey(
         &mut self,
-        myself_identifier: &[u8],
-        myself: &SigningIdentity,
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
     ) -> Result<(), PlatformError> {
+        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+
+        let cipher_suite_provider = crypto_provider
+            .cipher_suite_provider(cs)
+            .ok_or(PlatformError::UnsupportedCiphersuite)?;
+
+        let signature_secret_key = myself_sigkey.to_vec().into();
+        let signature_public_key = cipher_suite_provider
+            .signature_key_derive_public(&signature_secret_key)
+            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
+
+        let identity = cipher_suite_provider
+            .hash(&signature_public_key)
+            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
+
         let signature_data = SignatureData {
-            signing_identity: myself.mls_encode_to_vec()?,
+            identifier: identity,
+            public_key: signature_public_key.to_vec(),
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = myself_identifier;
+        let key = &signature_data.identifier;
 
         let engine = self.get_sqlite_engine()?;
         let storage = engine
@@ -273,8 +291,24 @@ impl TemporaryState {
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
     ) -> Result<(), PlatformError> {
+        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+
+        let cipher_suite_provider = crypto_provider
+            .cipher_suite_provider(cs)
+            .ok_or(PlatformError::UnsupportedCiphersuite)?;
+
+        let signature_secret_key = myself_sigkey.to_vec().into();
+        let signature_public_key = cipher_suite_provider
+            .signature_key_derive_public(&signature_secret_key)
+            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
+
+        let identity = cipher_suite_provider
+            .hash(&signature_public_key)
+            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
+
         let signature_data = SignatureData {
-            signing_identity: myself.mls_encode_to_vec()?,
+            identifier: identity,
+            public_key: signature_public_key.to_vec(),
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
         };

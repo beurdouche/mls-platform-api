@@ -2,7 +2,7 @@ mod state;
 
 use mls_rs::error::{AnyError, IntoAnyError};
 use mls_rs::group::proposal::{CustomProposal, ProposalType};
-use mls_rs::group::{ExportedTree, ReceivedMessage};
+use mls_rs::group::{Capabilities, ExportedTree, ReceivedMessage};
 use mls_rs::identity::{Credential, SigningIdentity};
 use mls_rs::mls_rs_codec::MlsEncode;
 use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList, IdentityProvider};
@@ -131,23 +131,20 @@ pub fn mls_generate_signature_keypair(
         .signature_key_generate()
         .map_err(|_| PlatformError::UnsupportedCiphersuite)?;
 
-    let identifier = todo!(); // Sha256::sha256(&signature_pubkey);
+    let cipher_suite_provider = crypto_provider
+        .cipher_suite_provider(cs)
+        .ok_or(PlatformError::UnsupportedCiphersuite)?;
 
-    // // Create the credential and the signing identity.
-    // let credential = mls_generate_credential(myself)?;
-    // let signing_identity: SigningIdentity =
-    //     SigningIdentity::new(credential.into_credential(), signature_pubkey);
-
-    // // Retrieve the identifier bytes (they should be identical to myself)
-    // let identifier_bytes: Vec<u8> = DefaultIdentityProvider::new()
-    //     .identity(&signing_identity, &Default::default())
-    //     .map_err(|e| MlsError::IdentityError(e.into_any_error()))?;
+    let identifier = cipher_suite_provider
+        .hash(&signature_pubkey)
+        .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
     // Print the signature key
     println!("Signature Secret Key: {:?}", hex::encode(&signature_key));
     println!("Signature Identifier: {:?}", hex::encode(&identifier));
-    // // Store the signature key pair.
-    // let _ = state.insert_sigkey(&identifier_bytes, &signing_identity, &signature_key, cs);
+
+    // Store the signature key pair.
+    let _ = state.insert_sigkey(&signature_key, cs);
 
     Ok(identifier)
 }
@@ -171,7 +168,6 @@ pub fn mls_generate_key_package(
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
     // Create a client for that artificial state
-    let default_group_config = GroupConfig::default();
     let client = state.client(
         &myself,
         ProtocolVersion::MLS_10,
@@ -179,7 +175,7 @@ pub fn mls_generate_key_package(
         leaf_node_extensions,
         None,
         None,
-    );
+    )?;
 
     // Generate a KeyPackage from that client_default
     let key_package = client.generate_key_package_message()?;
@@ -190,6 +186,8 @@ pub fn mls_generate_key_package(
 ///
 /// Get group members.
 ///
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct MlsMembers {
     epoch: u64,
     identities: Vec<(Identity, Credential)>,
@@ -268,21 +266,21 @@ pub fn mls_group_context(
 ///
 /// Group management: Create a Group
 ///
+
+// version: ProtocolVersion, <- Avoid app to set this, the platform should set it
+
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
     gid: Option<GroupId>,
-    // Below is group config
+    // Group config
     cs: CipherSuite,
     _credential: Credential,
-    // version: ProtocolVersion, <- Avoid app to set this, the platform should set it
-    // Below is client config
+    // Client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
-    // TODO: Define type for capabilities
-    _leaf_node_capabilities: Option<Vec<u8>>,
+    _leaf_node_capabilities: Option<Capabilities>,
     // lifetime: Option<u64>,
-    // TODO: Client config++
 ) -> Result<GroupId, PlatformError> {
     // Build the client
     let client = pstate.client_default(myself)?;
@@ -312,31 +310,24 @@ pub fn mls_group_create(
 ///
 
 pub struct MlsCommitOutput {
-    commit: MlsMessage,
-    welcome: Vec<MlsMessage>,
-    group_info: Option<MlsMessage>,
-    ratchet_tree: Option<Vec<u8>>,
+    pub commit: MlsMessage,
+    pub welcome: Vec<MlsMessage>,
+    pub group_info: Option<MlsMessage>,
+    pub ratchet_tree: Option<Vec<u8>>,
     // pub unused_proposals: Vec<crate::mls_rules::ProposalInfo<Proposal>>, from mls_rs
 }
-
-// pub struct CommitOutput {
-//     pub commit_message: MlsMessage,
-//     pub welcome_messages: Vec<MlsMessage>,
-//     pub ratchet_tree: Option<ExportedTree<'static>>,
-//     pub external_commit_group_info: Option<MlsMessage>,
-// }
 
 pub fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
     myself: &Identity,
     new_members: Vec<MlsMessage>,
-) -> Result<MlsCommitOutput, PlatformError> {
+) -> Result<Vec<MlsCommitOutput>, PlatformError> {
     // Get the group from the state
     let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
 
-    let mut commit = new_members
+    let mut commit_output = new_members
         .into_iter()
         .try_fold(group.commit_builder(), |commit_builder, user| {
             commit_builder.add_member(user)
@@ -344,13 +335,19 @@ pub fn mls_group_add(
         .build()?;
 
     // We use the default mode which returns only one welcome message
-    let welcome = commit.welcome_messages.remove(0);
-    let commit = commit.commit_message;
+    let welcome = commit_output.welcome_messages.remove(0);
+
+    let commit_output = MlsCommitOutput {
+        commit: commit_output.commit_message.clone(),
+        welcome: vec![welcome], // TODO: This could be the direct mapping
+        group_info: commit_output.external_commit_group_info,
+        ratchet_tree: None, // TODO: Is this ok for that welcome mode ?
+    };
 
     // Write the group to the storage
     group.write_to_storage()?;
 
-    unimplemented!()
+    Ok(vec![commit_output])
 }
 
 pub fn mls_group_propose_add(
