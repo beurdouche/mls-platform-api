@@ -4,6 +4,7 @@ use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
 use mls_rs::identity::basic::BasicCredential;
+use mls_rs::mls_rs_codec::MlsEncode;
 
 fn main() -> Result<(), PlatformError> {
     // Default group configuration
@@ -14,10 +15,10 @@ fn main() -> Result<(), PlatformError> {
     let mut state_bob = mls_platform_api::state_access("bob.db".into(), [0u8; 32])?;
 
     // Credentials
-    let alice_cred = BasicCredential::new(b"alice".to_vec()).into_credential();
-    let bob_cred = BasicCredential::new(b"bob".to_vec()).into_credential();
+    let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
+    let bob_cred = mls_platform_api::mls_generate_credential_basic("bob")?;
 
-    // Create signature keypairs
+    // Create signature keypairs and store them in the state
     let alice_id = mls_platform_api::mls_generate_signature_keypair(
         &mut state_alice,
         group_config.ciphersuite,
@@ -33,7 +34,6 @@ fn main() -> Result<(), PlatformError> {
     let bob_kp = mls_platform_api::mls_generate_key_package(
         &mut state_bob,
         bob_id.clone(),
-        group_config.ciphersuite,
         bob_cred,
         None,
         None,
@@ -46,9 +46,8 @@ fn main() -> Result<(), PlatformError> {
     let gid = mls_platform_api::mls_group_create(
         &mut state_alice,
         &alice_id,
-        None,
-        group_config.ciphersuite,
         alice_cred,
+        None,
         None,
         None,
         None,
@@ -60,39 +59,26 @@ fn main() -> Result<(), PlatformError> {
     let commit_outputs =
         mls_platform_api::mls_group_add(&mut state_alice, &gid, &alice_id, vec![bob_kp])?;
     let welcome = commit_outputs.index(0).welcome.clone().remove(0);
-
-    mls_platform_api::mls_receive(
-        &state_alice,
-        &gid,
-        &alice_id,
-        MlsMessageOrAck::Ack,
-        Some(group_config.clone()),
-    )?;
+    mls_platform_api::mls_receive(&state_alice, &gid, &alice_id, MlsMessageOrAck::Ack)?;
 
     // Bob joins
     mls_platform_api::mls_group_confirm_join(&state_bob, &bob_id, welcome.clone(), None)?;
 
     // Bob sends message to alice
-    let ciphertext = mls_platform_api::mls_send(
-        &state_bob,
-        &gid,
-        &bob_id,
-        b"hello",
-        Some(group_config.clone()),
-    )?;
+    let ciphertext = mls_platform_api::mls_send(&state_bob, &gid, &bob_id, b"hello")?;
 
+    // Alice receives the message
     let message = mls_platform_api::mls_receive(
         &state_alice,
         &gid,
         &alice_id,
         MlsMessageOrAck::MlsMessage(ciphertext),
-        Some(group_config.clone()),
     )?;
 
     dbg!(format!("{message:?}"));
 
+    // List the members of the group
     let members = mls_platform_api::mls_members(&state_alice, &gid, &alice_id)?;
-
     dbg!(format!("{members:?}"));
 
     // Generate an exporter for the Group
@@ -103,9 +89,7 @@ fn main() -> Result<(), PlatformError> {
         "exporter label".as_bytes(),
         "exporter context".as_bytes(),
         32,
-        Some(group_config.clone()),
     )?;
-
     dbg!(format!("{exporter:?}"));
 
     Ok(())

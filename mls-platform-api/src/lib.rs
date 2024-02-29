@@ -3,7 +3,8 @@ mod state;
 use mls_rs::error::{AnyError, IntoAnyError};
 use mls_rs::group::proposal::{CustomProposal, ProposalType};
 use mls_rs::group::{Capabilities, ExportedTree, ReceivedMessage};
-use mls_rs::identity::{Credential, SigningIdentity};
+use mls_rs::identity::SigningIdentity;
+use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
 use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
 
 pub use state::{PlatformState, TemporaryState};
@@ -16,14 +17,12 @@ pub use mls_rs::CipherSuite;
 pub use mls_rs::MlsMessage;
 pub use mls_rs::ProtocolVersion;
 
-// Import some mls_rs types
-use mls_rs::identity::basic::BasicCredential;
-
 // Define new types
 pub type GroupId = Vec<u8>;
 pub type GroupState = Vec<u8>;
 pub type Identity = Vec<u8>;
 pub type GroupEpoch = u64;
+pub type Credential = Vec<u8>;
 
 #[allow(clippy::large_enum_variant)]
 pub enum MlsMessageOrAck {
@@ -36,6 +35,8 @@ pub enum MlsMessageOrAck {
 ///
 #[derive(Debug, thiserror::Error)]
 pub enum PlatformError {
+    #[error("CoreError")]
+    CoreError,
     #[error(transparent)]
     MlsError(#[from] mls_rs::error::MlsError),
     #[error("IdentityError")]
@@ -65,15 +66,15 @@ pub enum PlatformError {
 ///
 /// Generate or Retrieve a PlatformState.
 ///
-pub fn state_access(db_path: String, db_key: [u8; 32]) -> Result<PlatformState, PlatformError> {
-    PlatformState::new(db_path, db_key)
+pub fn state_access(name: String, key: [u8; 32]) -> Result<PlatformState, PlatformError> {
+    PlatformState::new(name, key)
 }
 
 ///
 /// Delete a PlatformState.
 ///
-pub fn state_delete(db_path: String) -> Result<(), PlatformError> {
-    PlatformState::delete(db_path)
+pub fn state_delete(name: String) -> Result<(), PlatformError> {
+    PlatformState::delete(name)
 }
 
 ///
@@ -106,9 +107,11 @@ impl Default for GroupConfig {
 ///
 
 // ? Do we want to keep this at all ?
-pub fn mls_generate_credential_basic(name: &str) -> Result<BasicCredential, PlatformError> {
-    let credential = mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec());
-    Ok(credential)
+pub fn mls_generate_credential_basic(name: &str) -> Result<Credential, PlatformError> {
+    let credential =
+        mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec()).into_credential();
+    let credential_bytes = credential.mls_encode_to_vec()?;
+    Ok(credential_bytes)
 }
 
 ///
@@ -154,26 +157,28 @@ pub fn mls_generate_key_package(
     state: &PlatformState,
     myself: Identity,
     // Below is group config
-    cs: CipherSuite,
+    // cs: CipherSuite, <- // TODO: Should we remove this ?
     credential: Credential,
     // version: ProtocolVersion, <- Avoid app to set this, the platform should set it
     // Below is client config
     key_package_extensions: Option<ExtensionList>,
     leaf_node_extensions: Option<ExtensionList>,
-    // TODO: Define type for capabilities
-    _leaf_node_capabilities: Option<Vec<u8>>,
+    leaf_node_capabilities: Option<Capabilities>,
     // lifetime: Option<u64>,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
-    // Create a client for that artificial state
+    // TODO: Support more than basic credential
+    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
+
+    // Create a client for that state
     let client = state.client(
         &myself,
-        Some(credential),
+        Some(decoded_cred),
         ProtocolVersion::MLS_10,
         key_package_extensions,
         leaf_node_extensions,
         None,
-        None,
+        leaf_node_capabilities,
     )?;
 
     // Generate a KeyPackage from that client_default
@@ -217,7 +222,7 @@ pub fn mls_members(
                 cipher_suite_provider
                     .hash(&identity.signature_key)
                     .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?,
-                identity.credential.clone(),
+                identity.credential.mls_encode_to_vec()?,
             ))
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
@@ -235,9 +240,9 @@ pub fn mls_members(
 pub type GroupContext = Vec<u8>; // TODO
 
 pub fn mls_group_context(
-    state: &PlatformState,
-    gid: &GroupId,
-    myself: &Identity,
+    _state: &PlatformState,
+    _gid: &GroupId,
+    _myself: &Identity,
 ) -> Result<GroupContext, PlatformError> {
     unimplemented!()
     // return Json(GroupContext {
@@ -273,10 +278,10 @@ pub fn mls_group_context(
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
+    credential: Credential,
     gid: Option<GroupId>,
     // Group config
-    cs: CipherSuite,
-    credential: Credential,
+    // cs: CipherSuite, <- TODO: Remove ?
     // Client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
@@ -284,9 +289,11 @@ pub fn mls_group_create(
     // lifetime: Option<u64>,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
+    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
+
     let client = pstate.client(
         myself,
-        Some(credential),
+        Some(decoded_cred),
         ProtocolVersion::MLS_10,
         None,
         None,
@@ -479,7 +486,9 @@ pub fn mls_group_update(
             .signature_key_derive_public(&signature_secret_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
-        let signing_identity = SigningIdentity::new(cred, signature_public_key);
+        let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut cred.as_slice())?;
+
+        let signing_identity = SigningIdentity::new(decoded_cred, signature_public_key);
         let identity = cipher_suite_provider
             .hash(&signing_identity.signature_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
@@ -518,10 +527,10 @@ pub fn mls_group_update(
 }
 
 pub fn mls_group_propose_update(
-    pstate: &mut PlatformState,
-    gid: GroupId,
-    myself: &Identity,
-    signature_key: Option<Vec<u8>>,
+    _pstate: &mut PlatformState,
+    _gid: GroupId,
+    _myself: &Identity,
+    _signature_key: Option<Vec<u8>>,
     // Below is client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
@@ -593,7 +602,6 @@ pub fn mls_group_propose_leave(
     pstate: PlatformState,
     gid: GroupId,
     myself: &Identity,
-    group_config: Option<GroupConfig>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
     let self_index = group.current_member_index();
@@ -611,7 +619,6 @@ pub fn mls_group_close(
     pstate: PlatformState,
     gid: GroupId,
     myself: &Identity,
-    group_config: Option<GroupConfig>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
     // Remove everyone from the group.
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
@@ -655,7 +662,6 @@ pub fn mls_receive(
     gid: &GroupId,
     myself: &Identity,
     message_or_ack: MlsMessageOrAck,
-    group_config: Option<GroupConfig>,
 ) -> Result<Vec<u8>, PlatformError> {
     // TODO: Do we need the GID as input since it is in the message framing ?
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
@@ -689,7 +695,6 @@ pub fn mls_send(
     gid: &GroupId,
     myself: &Identity,
     message: &[u8],
-    group_config: Option<GroupConfig>,
 ) -> Result<MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
@@ -702,12 +707,11 @@ pub fn mls_send(
 ///
 /// Propose + Commit a GroupContextExtension
 ///
-pub fn mls_send_groupcontextextension(
+pub fn mls_send_group_context_extension(
     pstate: &PlatformState,
     gid: GroupId,
     myself: &Identity,
     new_gce: Vec<Extension>,
-    group_config: Option<GroupConfig>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
 
@@ -728,7 +732,6 @@ pub fn mls_send_custom_proposal(
     myself: &Identity,
     proposal_type: ProposalType,
     data: Vec<u8>,
-    group_config: Option<GroupConfig>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
     let custom_proposal = CustomProposal::new(proposal_type, data);
@@ -747,7 +750,6 @@ pub fn mls_export(
     label: &[u8],
     context: &[u8],
     len: u64,
-    group_config: Option<GroupConfig>,
     // TODO: epoch_number: Option<u64>, this is not supported in the current version of mls-rs
 ) -> Result<(Vec<u8>, u64), PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
