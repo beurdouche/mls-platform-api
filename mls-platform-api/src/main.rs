@@ -26,8 +26,9 @@ fn main() -> Result<(), PlatformError> {
     let bob_id =
         mls_platform_api::mls_generate_signature_keypair(&mut state_bob, group_config.ciphersuite)?;
 
-    dbg!(String::from_utf8(alice_id.clone()).unwrap());
-    dbg!(String::from_utf8(bob_id.clone()).unwrap());
+    dbg!("Alice identifier", hex::encode(&alice_id));
+    dbg!("Bob identifier", hex::encode(&bob_id));
+    // dbg!(String::from_utf8(bob_id.clone()).unwrap());
 
     // Create Key Package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(

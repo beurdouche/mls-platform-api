@@ -179,6 +179,8 @@ pub fn mls_generate_key_package(
 
     // Generate a KeyPackage from that client_default
     let key_package = client.generate_key_package_message()?;
+
+    // TODO: We should store the key packages in the state
     // let kp_bytes = key_package.mls_encode_to_vec()?;
     Ok(key_package)
 }
