@@ -167,7 +167,7 @@ pub fn mls_generate_key_package(
     // lifetime: Option<u64>,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
-    // TODO: Support more than basic credential
+    // Decode the Credential
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
     // Create a client for that state

@@ -3,9 +3,6 @@ use std::ops::Index;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use mls_rs::identity::basic::BasicCredential;
-use mls_rs::mls_rs_codec::MlsEncode;
-
 fn main() -> Result<(), PlatformError> {
     // Default group configuration
     let group_config = mls_platform_api::GroupConfig::default();
@@ -17,6 +14,9 @@ fn main() -> Result<(), PlatformError> {
     // Credentials
     let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
     let bob_cred = mls_platform_api::mls_generate_credential_basic("bob")?;
+
+    dbg!("Alice credential", hex::encode(&alice_cred));
+    dbg!("Bob credential", hex::encode(&bob_cred));
 
     // Create signature keypairs and store them in the state
     let alice_id = mls_platform_api::mls_generate_signature_keypair(
