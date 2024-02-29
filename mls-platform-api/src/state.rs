@@ -178,6 +178,8 @@ impl PlatformState {
             .hash(&signature_public_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
+        dbg!("Computed identifier", hex::encode(&identity));
+
         let signature_data = SignatureData {
             identifier: identity,
             public_key: signature_public_key.to_vec(),
