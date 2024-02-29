@@ -10,8 +10,8 @@ fn main() -> Result<(), PlatformError> {
     let group_config = mls_platform_api::GroupConfig::default();
 
     // Storage states
-    let mut state_alice = mls_platform_api::state_access("alice".into(), [0u8; 32])?;
-    let mut state_bob = mls_platform_api::state_access("bob".into(), [0u8; 32])?;
+    let mut state_alice = mls_platform_api::state_access("alice.db".into(), [0u8; 32])?;
+    let mut state_bob = mls_platform_api::state_access("bob.db".into(), [0u8; 32])?;
 
     // Credentials
     let alice_cred = BasicCredential::new(b"alice".to_vec()).into_credential();

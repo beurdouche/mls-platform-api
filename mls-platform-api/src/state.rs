@@ -120,9 +120,9 @@ impl PlatformState {
         myself_identifier: &[u8],
         version: ProtocolVersion,
         key_package_extensions: Option<ExtensionList>,
-        leaf_node_extensions: Option<ExtensionList>,
-        group_context_extensions: Option<ExtensionList>,
-        capabilities: Option<Capabilities>,
+        _leaf_node_extensions: Option<ExtensionList>,
+        _group_context_extensions: Option<ExtensionList>,
+        _capabilities: Option<Capabilities>,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
         let myself_sig_data = self
@@ -169,31 +169,28 @@ impl PlatformState {
             .cipher_suite_provider(cs)
             .ok_or(PlatformError::UnsupportedCiphersuite)?;
 
-        let signature_secret_key = myself_sigkey.to_vec().into();
         let signature_public_key = cipher_suite_provider
-            .signature_key_derive_public(&signature_secret_key)
+            .signature_key_derive_public(myself_sigkey)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
         let identity = cipher_suite_provider
             .hash(&signature_public_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
-        dbg!("Computed identifier", hex::encode(&identity));
-
         let signature_data = SignatureData {
-            identifier: identity,
+            identifier: identity.clone(),
             public_key: signature_public_key.to_vec(),
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = &signature_data.identifier;
+        let key = identity;
+        let data = bincode::serialize(&signature_data)?;
 
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))?;
-        let data = bincode::serialize(&signature_data)?;
 
         storage
             .insert(hex::encode(key), data)
@@ -206,7 +203,7 @@ impl PlatformState {
         myself_identifier: &[u8],
     ) -> Result<Option<SignatureData>, PlatformError> {
         // TODO: Not clear if the option is needed here, the underlying function needs it.
-        let key = myself_identifier;
+        let key = myself_identifier.to_vec();
         let engine = self.get_sqlite_engine()?;
         let storage = engine
             .application_data_storage()
