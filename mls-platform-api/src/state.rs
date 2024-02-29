@@ -1,6 +1,5 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
-    convert::identity,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -18,7 +17,6 @@ use mls_rs::{
 
 use mls_rs::CipherSuiteProvider;
 use mls_rs::CryptoProvider;
-use mls_rs_crypto_rustcrypto;
 
 use mls_rs_provider_sqlite::{
     connection_strategy::{
@@ -285,8 +283,6 @@ impl TemporaryState {
 
     pub fn insert_sigkey(
         &mut self,
-        myself_identifier: &[u8],
-        myself: &SigningIdentity,
         myself_sigkey: &SignatureSecretKey,
         cs: CipherSuite,
     ) -> Result<(), PlatformError> {
@@ -306,13 +302,13 @@ impl TemporaryState {
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
         let signature_data = SignatureData {
-            identifier: identity,
+            identifier: identity.clone(),
             public_key: signature_public_key.to_vec(),
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
         };
 
-        let key = myself_identifier.to_vec();
+        let key = identity;
 
         self.sigkeys.insert(key, signature_data);
         // TODO: We could return the value to indicate if the key
