@@ -4,10 +4,8 @@ use mls_rs::error::{AnyError, IntoAnyError};
 use mls_rs::group::proposal::{CustomProposal, ProposalType};
 use mls_rs::group::{Capabilities, ExportedTree, ReceivedMessage};
 use mls_rs::identity::{Credential, SigningIdentity};
-use mls_rs::mls_rs_codec::MlsEncode;
-use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList, IdentityProvider};
+use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
 
-use sha2::Sha256;
 pub use state::{PlatformState, TemporaryState};
 
 pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
@@ -144,7 +142,7 @@ pub fn mls_generate_signature_keypair(
     println!("Signature Identifier: {:?}", hex::encode(&identifier));
 
     // Store the signature key pair.
-    let _ = state.insert_sigkey(&signature_key, cs);
+    let _ = state.insert_sigkey(&signature_key, &signature_pubkey, cs, &identifier);
 
     Ok(identifier)
 }
@@ -170,6 +168,7 @@ pub fn mls_generate_key_package(
     // Create a client for that artificial state
     let client = state.client(
         &myself,
+        Some(credential),
         ProtocolVersion::MLS_10,
         key_package_extensions,
         leaf_node_extensions,
@@ -277,7 +276,7 @@ pub fn mls_group_create(
     gid: Option<GroupId>,
     // Group config
     cs: CipherSuite,
-    _credential: Credential,
+    credential: Credential,
     // Client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
@@ -285,7 +284,15 @@ pub fn mls_group_create(
     // lifetime: Option<u64>,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
-    let client = pstate.client_default(myself)?;
+    let client = pstate.client(
+        myself,
+        Some(credential),
+        ProtocolVersion::MLS_10,
+        None,
+        None,
+        None,
+        None,
+    )?;
 
     // Generate a GroupId if none is provided
     let mut group = match gid {

@@ -1,22 +1,20 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    convert::Infallible,
     path::Path,
     sync::{Arc, Mutex},
 };
 
 use mls_rs::{
     client_builder::MlsConfig,
-    crypto::SignatureSecretKey,
+    crypto::{SignaturePublicKey, SignatureSecretKey},
     error::IntoAnyError,
     group::Capabilities,
-    identity::SigningIdentity,
+    identity::{Credential, SigningIdentity},
     mls_rs_codec::{MlsDecode, MlsEncode},
     storage_provider::{EpochRecord, GroupState, KeyPackageData},
     CipherSuite, Client, ExtensionList, GroupStateStorage, KeyPackageStorage, ProtocolVersion,
 };
-
-use mls_rs::CipherSuiteProvider;
-use mls_rs::CryptoProvider;
 
 use mls_rs_provider_sqlite::{
     connection_strategy::{
@@ -25,7 +23,6 @@ use mls_rs_provider_sqlite::{
     },
     SqLiteDataStorageEngine,
 };
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{GroupConfig, Identity, PlatformError};
 
@@ -33,42 +30,6 @@ use crate::{GroupConfig, Identity, PlatformError};
 pub struct GroupData {
     state_data: Vec<u8>,
     epoch_data: HashMap<u64, Vec<u8>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct KeyPackageData2 {
-    pub key_package_data: KeyPackageData,
-}
-
-//
-// Hack as I can't figure out how to implement Serialize/Deserialize for KeyPackageData
-// TODO: Discuss with Marta
-//
-impl Serialize for KeyPackageData2 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Serialize `KeyPackageData` using `MlsEncode` and then serialize the resulting byte array
-        let encoded = self
-            .key_package_data
-            .mls_encode_to_vec()
-            .map_err(serde::ser::Error::custom)?;
-        serializer.serialize_bytes(&encoded)
-    }
-}
-
-impl<'de> Deserialize<'de> for KeyPackageData2 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize byte array and then use `MlsDecode` to get `KeyPackageData`
-        let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
-        let key_package_data =
-            KeyPackageData::mls_decode(&mut bytes.as_slice()).map_err(serde::de::Error::custom)?;
-        Ok(KeyPackageData2 { key_package_data })
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -82,18 +43,17 @@ pub struct TemporaryState {
     pub groups: Arc<Mutex<HashMap<Vec<u8>, GroupData>>>,
     /// signing identity => key data
     pub sigkeys: HashMap<Vec<u8>, SignatureData>,
-    pub key_packages: Arc<Mutex<HashMap<Vec<u8>, KeyPackageData2>>>,
+    pub key_packages: Arc<Mutex<HashMap<Vec<u8>, KeyPackageData>>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct SignatureData {
     #[serde(with = "hex::serde")]
-    pub identifier: Vec<u8>,
-    #[serde(with = "hex::serde")]
     pub public_key: Vec<u8>,
     pub cs: u16,
     #[serde(with = "hex::serde")]
     pub secret_key: Vec<u8>,
+    pub credential: Option<Credential>,
 }
 
 impl PlatformState {
@@ -115,7 +75,8 @@ impl PlatformState {
 
     pub fn client(
         &self,
-        myself_identifier: &[u8],
+        myself_identifier: &Identity,
+        myself_credential: Option<Credential>,
         version: ProtocolVersion,
         key_package_extensions: Option<ExtensionList>,
         _leaf_node_extensions: Option<ExtensionList>,
@@ -123,16 +84,35 @@ impl PlatformState {
         _capabilities: Option<Capabilities>,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
-        let myself_sig_data = self
+        let engine = self.get_sqlite_engine()?;
+
+        let mut myself_sig_data = self
             .get_sig_data(myself_identifier)?
             .ok_or(PlatformError::UnavailableSecret)?;
-        let engine = self.get_sqlite_engine()?;
+
+        let myself_credential = if let Some(cred) = myself_credential {
+            myself_sig_data.credential = Some(cred.clone());
+            self.store_sigdata(myself_identifier, &myself_sig_data)?;
+
+            cred
+        } else if let Some(cred) = myself_sig_data.credential {
+            cred
+        } else {
+            return Err(PlatformError::UndefinedIdentity);
+        };
+
+        let myself_signing_identity =
+            SigningIdentity::new(myself_credential, myself_sig_data.public_key.into());
 
         let mut builder = mls_rs::client_builder::ClientBuilder::new_sqlite(engine)
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))?
             .crypto_provider(crypto_provider)
             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
-            .signer(myself_sig_data.secret_key.into());
+            .signing_identity(
+                myself_signing_identity,
+                myself_sig_data.secret_key.into(),
+                myself_sig_data.cs.into(),
+            );
 
         if let Some(key_package_extensions) = key_package_extensions {
             builder = builder
@@ -144,10 +124,11 @@ impl PlatformState {
 
     pub fn client_default(
         &self,
-        myself_identifier: &[u8],
+        myself_identifier: &Identity,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         self.client(
             myself_identifier,
+            None,
             ProtocolVersion::MLS_10,
             None,
             None,
@@ -157,41 +138,38 @@ impl PlatformState {
     }
 
     pub fn insert_sigkey(
-        &mut self,
+        &self,
         myself_sigkey: &SignatureSecretKey,
+        myself_pubkey: &SignaturePublicKey,
         cs: CipherSuite,
+        identifier: &Identity,
     ) -> Result<(), PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
-
-        let cipher_suite_provider = crypto_provider
-            .cipher_suite_provider(cs)
-            .ok_or(PlatformError::UnsupportedCiphersuite)?;
-
-        let signature_public_key = cipher_suite_provider
-            .signature_key_derive_public(myself_sigkey)
-            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
-
-        let identity = cipher_suite_provider
-            .hash(&signature_public_key)
-            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
-
         let signature_data = SignatureData {
-            identifier: identity.clone(),
-            public_key: signature_public_key.to_vec(),
+            public_key: myself_pubkey.to_vec(),
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
+            credential: None,
         };
 
-        let key = identity;
-        let data = bincode::serialize(&signature_data)?;
+        self.store_sigdata(identifier, &signature_data)?;
 
+        Ok(())
+    }
+
+    fn store_sigdata(
+        &self,
+        identifier: &Identity,
+        data: &SignatureData,
+    ) -> Result<(), PlatformError> {
+        let data = bincode::serialize(&data)?;
         let engine = self.get_sqlite_engine()?;
+
         let storage = engine
             .application_data_storage()
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))?;
 
         storage
-            .insert(hex::encode(key), data)
+            .insert(hex::encode(identifier), data)
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))?;
         Ok(())
     }
@@ -284,33 +262,18 @@ impl TemporaryState {
     pub fn insert_sigkey(
         &mut self,
         myself_sigkey: &SignatureSecretKey,
+        myself_pubkey: &SignaturePublicKey,
         cs: CipherSuite,
+        identifier: Identity,
     ) -> Result<(), PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
-
-        let cipher_suite_provider = crypto_provider
-            .cipher_suite_provider(cs)
-            .ok_or(PlatformError::UnsupportedCiphersuite)?;
-
-        let signature_secret_key = myself_sigkey.to_vec().into();
-        let signature_public_key = cipher_suite_provider
-            .signature_key_derive_public(&signature_secret_key)
-            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
-
-        let identity = cipher_suite_provider
-            .hash(&signature_public_key)
-            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
-
         let signature_data = SignatureData {
-            identifier: identity.clone(),
-            public_key: signature_public_key.to_vec(),
+            public_key: myself_pubkey.to_vec(),
             cs: *cs,
             secret_key: myself_sigkey.to_vec(),
+            credential: None,
         };
 
-        let key = identity;
-
-        self.sigkeys.insert(key, signature_data);
+        self.sigkeys.insert(identifier, signature_data);
         // TODO: We could return the value to indicate if the key
         // existed (see the definition of insert).
         Ok(())
@@ -407,26 +370,16 @@ impl GroupStateStorage for TemporaryState {
 }
 
 impl KeyPackageStorage for TemporaryState {
-    type Error = mls_rs::mls_rs_codec::Error;
+    type Error = Infallible;
 
     fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
-        // Convert KeyPackageData to KeyPackageData2
-        let pkg2 = KeyPackageData2 {
-            key_package_data: pkg,
-        };
-
         let mut states = self.key_packages.lock().unwrap();
-        states.insert(id, pkg2);
+        states.insert(id, pkg);
         Ok(())
     }
 
     fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
-        let states = self.key_packages.lock().unwrap();
-        // Retrieve KeyPackageData2 and convert it to KeyPackageData
-        match states.get(id) {
-            Some(pkg2) => Ok(Some(pkg2.key_package_data.clone())),
-            None => Ok(None),
-        }
+        Ok(self.key_packages.lock().unwrap().get(id).cloned())
     }
 
     fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
