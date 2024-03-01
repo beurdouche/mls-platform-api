@@ -17,6 +17,12 @@ pub use mls_rs::CipherSuite;
 pub use mls_rs::MlsMessage;
 pub use mls_rs::ProtocolVersion;
 
+// Helpers
+mod json;
+use json::{from_json_bytes, to_json_bytes, Json, JsonBytes};
+
+use serde::{Deserialize, Serialize};
+
 // Define new types
 pub type GroupId = Vec<u8>;
 pub type GroupState = Vec<u8>;
@@ -55,6 +61,8 @@ pub enum PlatformError {
     UnavailableSecret,
     #[error("MutexError")]
     MutexError,
+    #[error(transparent)]
+    JsonConversionError(#[from] json::SerdeError),
     #[error(transparent)]
     MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
     #[error(transparent)]
@@ -193,17 +201,19 @@ pub fn mls_generate_key_package(
 /// Get group members.
 ///
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsMembers {
     epoch: u64,
     identities: Vec<(Identity, Credential)>,
 }
 
+pub type MlsMembersJsonBytes = Vec<u8>;
+
 pub fn mls_members(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<MlsMembers, PlatformError> {
+) -> Result<MlsMembersJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     let group = state.client_default(myself)?.load_group(gid)?;
@@ -227,10 +237,9 @@ pub fn mls_members(
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
-    let res = MlsMembers { epoch, identities };
-
-    Ok(res)
-    // serde_json::to_string(&res)?.as_bytes()
+    let members = MlsMembers { epoch, identities };
+    let members_json_bytes = to_json_bytes(&members)?;
+    Ok(members_json_bytes)
 }
 
 ///
@@ -249,25 +258,6 @@ pub fn mls_group_context(
     // ...
     // });
 }
-
-// ///
-// /// Get the Identity from a SigningIdentity.
-// ///
-// pub fn mls_identity(
-//     signing_identity: &SigningIdentity,
-//     // cs: CipherSuite,
-// ) -> Result<Identity, MlsError> {
-//     let identity_bytes = DefaultIdentityProvider::new()
-//         .identity(&signing_identity, &Default::default())
-//         .map_err(|e| MlsError::IdentityError(e.into_any_error()))?;
-//     Ok(identity_bytes)
-//     // DefaultCryptoProvider::default()
-//     //     .cipher_suite_provider(cs)
-//     //     .ok_or(MlsError::UnsupportedCiphersuite)?
-//     //     .hash(&signing_identity.mls_encode_to_vec()?)
-//     //     .map(Identity)
-//     //     .map_err(|e| MlsError::IdentityError(e.into_any_error()))
-// }
 
 ///
 /// Group management: Create a Group
@@ -325,6 +315,8 @@ pub fn mls_group_create(
 /// Group management: Adding a user.
 ///
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+
 pub struct MlsCommitOutput {
     pub commit: MlsMessage,
     pub welcome: Vec<MlsMessage>,
@@ -333,12 +325,14 @@ pub struct MlsCommitOutput {
     // pub unused_proposals: Vec<crate::mls_rules::ProposalInfo<Proposal>>, from mls_rs
 }
 
+pub type MlsCommitOutputJsonBytes = Vec<u8>;
+
 pub fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
     myself: &Identity,
     new_members: Vec<MlsMessage>,
-) -> Result<Vec<MlsCommitOutput>, PlatformError> {
+) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
     // Get the group from the state
     let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
@@ -363,7 +357,8 @@ pub fn mls_group_add(
     // Write the group to the storage
     group.write_to_storage()?;
 
-    Ok(vec![commit_output])
+    let commit_output_json_bytes = to_json_bytes(&commit_output)?;
+    Ok(commit_output_json_bytes)
 }
 
 pub fn mls_group_propose_add(
