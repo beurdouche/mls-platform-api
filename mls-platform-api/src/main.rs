@@ -3,6 +3,8 @@ use std::ops::Index;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
+use serde_json::from_slice;
+
 fn main() -> Result<(), PlatformError> {
     // Default group configuration
     let group_config = mls_platform_api::GroupConfig::default();
@@ -56,9 +58,18 @@ fn main() -> Result<(), PlatformError> {
     dbg!("Group created", hex::encode(&gid));
 
     // Add bob
-    let commit_outputs =
+    let commit_output_bytes =
         mls_platform_api::mls_group_add(&mut state_alice, &gid, &alice_id, vec![bob_kp])?;
-    let welcome = commit_outputs.index(0).welcome.clone().remove(0);
+
+    let commit_output: mls_platform_api::MlsCommitOutput =
+        from_slice(&commit_output_bytes).expect("Failed to deserialize MlsCommitOutput");
+
+    let welcome = commit_output
+        .welcome
+        .get(0)
+        .expect("No welcome messages found")
+        .clone();
+
     mls_platform_api::mls_receive(&state_alice, &gid, &alice_id, MlsMessageOrAck::Ack)?;
 
     // Bob joins

@@ -8,7 +8,7 @@ pub struct Json<T>(pub T);
 
 impl<T> Json<T>
 where
-    T: Serialize,
+    T: serde::Serialize,
 {
     /// Serializes the contained value into a JSON string.
     pub fn serialize(&self) -> Result<String, SerdeError> {
@@ -18,7 +18,7 @@ where
 
 impl<T> Json<T>
 where
-    T: for<'de> Deserialize<'de>,
+    T: for<'de> serde::Deserialize<'de>,
 {
     /// Deserializes a JSON string into the contained value.
     pub fn deserialize(s: &str) -> Result<T, SerdeError> {
@@ -33,7 +33,7 @@ pub struct JsonBytes<T>(pub T);
 
 impl<T> JsonBytes<T>
 where
-    T: Serialize,
+    T: serde::Serialize,
 {
     /// Serializes the contained value into a JSON byte vector.
     pub fn serialize(&self) -> Result<Vec<u8>, SerdeError> {

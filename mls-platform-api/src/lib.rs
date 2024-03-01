@@ -7,7 +7,12 @@ use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
 use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
 
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::to_string;
 pub use state::{PlatformState, TemporaryState};
+use std::fmt;
 
 pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
 pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
@@ -20,8 +25,6 @@ pub use mls_rs::ProtocolVersion;
 // Helpers
 mod json;
 use json::{from_json_bytes, to_json_bytes, Json, JsonBytes};
-
-use serde::{Deserialize, Serialize};
 
 // Define new types
 pub type GroupId = Vec<u8>;
@@ -315,14 +318,127 @@ pub fn mls_group_create(
 /// Group management: Adding a user.
 ///
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-
+#[derive(Clone, Debug, PartialEq)]
 pub struct MlsCommitOutput {
     pub commit: MlsMessage,
     pub welcome: Vec<MlsMessage>,
     pub group_info: Option<MlsMessage>,
     pub ratchet_tree: Option<Vec<u8>>,
     // pub unused_proposals: Vec<crate::mls_rules::ProposalInfo<Proposal>>, from mls_rs
+}
+
+impl Serialize for MlsCommitOutput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MlsCommitOutput", 4)?;
+
+        // Handle serialization for `commit`
+        let commit_bytes = self
+            .commit
+            .mls_encode_to_vec()
+            .map_err(serde::ser::Error::custom)?;
+        state.serialize_field("commit", &commit_bytes)?;
+
+        // Handle serialization for `welcome`. Collect into a Result to handle potential errors.
+        let welcome_bytes: Result<Vec<_>, _> = self
+            .welcome
+            .iter()
+            .map(|msg| msg.mls_encode_to_vec().map_err(serde::ser::Error::custom))
+            .collect();
+        // Unwrap the Result here, after all potential errors have been handled.
+        state.serialize_field("welcome", &welcome_bytes?)?;
+
+        // Handle serialization for `group_info`
+        let group_info_bytes = match self.group_info.as_ref().map(|gi| gi.mls_encode_to_vec()) {
+            Some(Ok(bytes)) => Some(bytes),
+            Some(Err(e)) => return Err(serde::ser::Error::custom(e)),
+            None => None,
+        };
+        state.serialize_field("group_info", &group_info_bytes)?;
+
+        // Directly serialize `ratchet_tree` as it is already an Option<Vec<u8>>
+        state.serialize_field("ratchet_tree", &self.ratchet_tree)?;
+
+        state.end()
+    }
+}
+
+use std::marker::PhantomData;
+
+impl<'de> Deserialize<'de> for MlsCommitOutput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MlsCommitOutputVisitor;
+
+        impl<'de> Visitor<'de> for MlsCommitOutputVisitor {
+            type Value = MlsCommitOutput;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct MlsCommitOutput")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<MlsCommitOutput, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut commit = None;
+                let mut welcome = None;
+                let mut group_info = None;
+                let mut ratchet_tree = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "commit" => {
+                            let value: Vec<u8> = map.next_value()?;
+                            commit = Some(
+                                MlsMessage::mls_decode(&mut &value[..])
+                                    .map_err(de::Error::custom)?,
+                            );
+                        }
+                        "welcome" => {
+                            let values: Vec<Vec<u8>> = map.next_value()?;
+                            welcome = Some(
+                                values
+                                    .into_iter()
+                                    .map(|v| {
+                                        MlsMessage::mls_decode(&mut &v[..])
+                                            .map_err(de::Error::custom)
+                                    })
+                                    .collect::<Result<_, _>>()?,
+                            );
+                        }
+                        "group_info" => {
+                            if let Some(value) = map.next_value::<Option<Vec<u8>>>()? {
+                                group_info = Some(
+                                    MlsMessage::mls_decode(&mut &value[..])
+                                        .map_err(de::Error::custom)?,
+                                );
+                            }
+                        }
+                        "ratchet_tree" => {
+                            ratchet_tree = map.next_value()?;
+                        }
+                        _ => { /* Ignore unknown fields */ }
+                    }
+                }
+
+                Ok(MlsCommitOutput {
+                    commit: commit.ok_or_else(|| de::Error::missing_field("commit"))?,
+                    welcome: welcome.ok_or_else(|| de::Error::missing_field("welcome"))?,
+                    group_info,
+                    ratchet_tree,
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] =
+            &["commit", "welcome", "group_info", "ratchet_tree"];
+        deserializer.deserialize_struct("MlsCommitOutput", FIELDS, MlsCommitOutputVisitor)
+    }
 }
 
 pub type MlsCommitOutputJsonBytes = Vec<u8>;
@@ -337,7 +453,7 @@ pub fn mls_group_add(
     let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
 
-    let mut commit_output = new_members
+    let commit_output = new_members
         .into_iter()
         .try_fold(group.commit_builder(), |commit_builder, user| {
             commit_builder.add_member(user)
@@ -345,20 +461,23 @@ pub fn mls_group_add(
         .build()?;
 
     // We use the default mode which returns only one welcome message
-    let welcome = commit_output.welcome_messages.remove(0);
+    let welcomes = commit_output.welcome_messages; //.remove(0);
 
     let commit_output = MlsCommitOutput {
         commit: commit_output.commit_message.clone(),
-        welcome: vec![welcome], // TODO: This could be the direct mapping
+        welcome: welcomes,
         group_info: commit_output.external_commit_group_info,
-        ratchet_tree: None, // TODO: Is this ok for that welcome mode ?
+        ratchet_tree: None, // TODO: Handle this !
     };
 
     // Write the group to the storage
     group.write_to_storage()?;
 
-    let commit_output_json_bytes = to_json_bytes(&commit_output)?;
-    Ok(commit_output_json_bytes)
+    // Encode the message as Json Bytes
+    let js_string = serde_json::to_string(&commit_output)?;
+    let js_bytes = js_string.as_bytes().to_vec();
+
+    Ok(js_bytes)
 }
 
 pub fn mls_group_propose_add(
