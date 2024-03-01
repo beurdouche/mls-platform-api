@@ -22,10 +22,6 @@ pub use mls_rs::CipherSuite;
 pub use mls_rs::MlsMessage;
 pub use mls_rs::ProtocolVersion;
 
-// Helpers
-mod json;
-use json::{from_json_bytes, to_json_bytes, Json, JsonBytes};
-
 // Define new types
 pub type GroupId = Vec<u8>;
 pub type GroupState = Vec<u8>;
@@ -64,8 +60,8 @@ pub enum PlatformError {
     UnavailableSecret,
     #[error("MutexError")]
     MutexError,
-    #[error(transparent)]
-    JsonConversionError(#[from] json::SerdeError),
+    #[error("JsonConversionError")]
+    JsonConversionError,
     #[error(transparent)]
     MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
     #[error(transparent)]
@@ -241,7 +237,12 @@ pub fn mls_members(
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
     let members = MlsMembers { epoch, identities };
-    let members_json_bytes = to_json_bytes(&members)?;
+
+    // Encode the message as Json Bytes
+    let members_json_string =
+        serde_json::to_string(&members).map_err(|_| PlatformError::JsonConversionError)?;
+    let members_json_bytes = members_json_string.as_bytes().to_vec();
+
     Ok(members_json_bytes)
 }
 
@@ -474,7 +475,8 @@ pub fn mls_group_add(
     group.write_to_storage()?;
 
     // Encode the message as Json Bytes
-    let js_string = serde_json::to_string(&commit_output)?;
+    let js_string =
+        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
     let js_bytes = js_string.as_bytes().to_vec();
 
     Ok(js_bytes)
