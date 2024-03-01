@@ -7,10 +7,10 @@ use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
 use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
 
-use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::to_string;
+
 pub use state::{PlatformState, TemporaryState};
 use std::fmt;
 
@@ -366,7 +366,7 @@ impl Serialize for MlsCommitOutput {
     }
 }
 
-use std::marker::PhantomData;
+
 
 impl<'de> Deserialize<'de> for MlsCommitOutput {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

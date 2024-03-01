@@ -1,4 +1,4 @@
-use std::ops::Index;
+
 
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
