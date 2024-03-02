@@ -211,7 +211,7 @@ pub type MlsMembersJsonBytes = Vec<u8>;
 pub fn mls_members(
     state: &PlatformState,
     gid: &GroupId,
-    myself: &Identity,
+    myself: &Identity, // TODO: Remove this !
 ) -> Result<MlsMembersJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -365,8 +365,6 @@ impl Serialize for MlsCommitOutput {
         state.end()
     }
 }
-
-
 
 impl<'de> Deserialize<'de> for MlsCommitOutput {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
