@@ -521,6 +521,9 @@ pub fn mls_group_remove(
 
     let commit = group.commit_builder().remove_member(removed)?.build()?;
 
+    // Write the group to the storage
+    group.write_to_storage()?;
+
     let commit_output = MlsCommitOutput {
         commit: commit.commit_message,
         welcome: commit.welcome_messages,

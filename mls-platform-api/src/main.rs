@@ -78,7 +78,7 @@ fn main() -> Result<(), PlatformError> {
     let members_str = mls_platform_api::to_string_custom(&members)?;
     println!("Members (alice, before adding bob): {members_str:?}");
 
-    // Add Bob
+    // Alice adds Bob to a group
     let commit_output_bytes =
         mls_platform_api::mls_group_add(&mut state_alice, &gid, &alice_id, vec![bob_kp])?;
 
@@ -164,8 +164,7 @@ fn main() -> Result<(), PlatformError> {
 
     let commit_3 = commit_3_output.commit;
 
-    // TODO: It is strange that this is not needed.
-    //mls_platform_api::mls_receive(&state_charlie, &gid, &charlie_id, MlsMessageOrAck::Ack)?;
+    mls_platform_api::mls_receive(&state_charlie, &gid, &charlie_id, MlsMessageOrAck::Ack)?;
 
     let members = mls_platform_api::mls_members(&state_charlie, &gid, &charlie_id)?;
     let members_str = mls_platform_api::to_string_custom(&members)?;
