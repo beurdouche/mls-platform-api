@@ -47,6 +47,7 @@ fn main() -> Result<(), PlatformError> {
         None,
         None,
         None,
+        None,
     )?;
 
     // Create Key Package for Charlie
@@ -54,6 +55,7 @@ fn main() -> Result<(), PlatformError> {
         &mut state_charlie,
         charlie_id.clone(),
         charlie_cred,
+        None,
         None,
         None,
         None,
@@ -65,6 +67,7 @@ fn main() -> Result<(), PlatformError> {
         &mut state_alice,
         &alice_id,
         alice_cred,
+        None,
         None,
         None,
         None,
@@ -171,7 +174,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (charlie, after removing alice): {members_str:?}");
 
     // Alice receives the commit from Charlie
-    let message = mls_platform_api::mls_receive(
+    let _ = mls_platform_api::mls_receive(
         &state_alice,
         &gid,
         &alice_id,
@@ -184,7 +187,7 @@ fn main() -> Result<(), PlatformError> {
     // TODO: Alice should probably delete the group from the state before this point
 
     // Bob receives the commit from Charlie
-    let message = mls_platform_api::mls_receive(
+    let _ = mls_platform_api::mls_receive(
         &state_bob,
         &gid,
         &bob_id,

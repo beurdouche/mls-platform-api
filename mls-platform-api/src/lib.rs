@@ -112,8 +112,6 @@ impl Default for GroupConfig {
 ///
 /// Generate a credential.
 ///
-
-// ? Do we want to keep this at all ?
 pub fn mls_generate_credential_basic(name: &str) -> Result<Credential, PlatformError> {
     let credential =
         mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec()).into_credential();
@@ -163,15 +161,12 @@ pub fn mls_generate_signature_keypair(
 pub fn mls_generate_key_package(
     state: &PlatformState,
     myself: Identity,
-    // Below is group config
-    // cs: CipherSuite, <- // TODO: Should we remove this ?
     credential: Credential,
-    // version: ProtocolVersion, <- Avoid app to set this, the platform should set it
     // Below is client config
     key_package_extensions: Option<ExtensionList>,
     leaf_node_extensions: Option<ExtensionList>,
     leaf_node_capabilities: Option<Capabilities>,
-    // lifetime: Option<u64>,
+    _lifetime: Option<u64>,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
     // Decode the Credential
@@ -249,40 +244,21 @@ pub fn mls_members(
 }
 
 ///
-/// Get the current epoch.
-///
-
-pub type GroupContext = Vec<u8>;
-
-pub fn mls_group_context(
-    _state: &PlatformState,
-    _gid: &GroupId,
-    _myself: &Identity,
-) -> Result<GroupContext, PlatformError> {
-    unimplemented!()
-    // return Json(GroupContext {
-    // ...
-    // });
-}
-
-///
 /// Group management: Create a Group
 ///
 
-// version: ProtocolVersion, <- Avoid app to set this, the platform should set it
+// TODO: We internally set the protocol version to avoid issues with
 
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
     credential: Credential,
     gid: Option<GroupId>,
-    // Group config
-    // cs: CipherSuite, <- TODO: Remove ?
     // Client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
     _leaf_node_capabilities: Option<Capabilities>,
-    // lifetime: Option<u64>,
+    _lifetime: Option<u64>,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
@@ -544,9 +520,9 @@ pub fn mls_group_remove(
 
 pub fn mls_group_propose_remove(
     pstate: &PlatformState,
-    gid: GroupId,
+    gid: &GroupId,
     myself: &Identity,
-    removed: Identity, // TODO: Handle Vec<Identity>
+    removed: &Identity, // TODO: Handle Vec<Identity>
 ) -> Result<MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
 
@@ -563,7 +539,7 @@ pub fn mls_group_propose_remove(
             let h = cipher_suite_provider
                 .hash(&m.signing_identity.signature_key)
                 .ok()?;
-            (h == removed).then_some(m.index)
+            (h == *removed).then_some(m.index)
         })
         .ok_or(PlatformError::UndefinedIdentity)?;
 
@@ -583,7 +559,7 @@ pub struct MlsGroupUpdate {
 
 pub type MlsGroupUpdateJsonBytes = Vec<u8>;
 
-/// Possibly add a random nonce as an optional parameter.
+/// TODO: Possibly add a random nonce as an optional parameter.
 pub fn mls_group_update(
     pstate: &mut PlatformState,
     gid: GroupId,
@@ -666,48 +642,15 @@ pub fn mls_group_propose_update(
     // Below is client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
-    // TODO: Define type for capabilities
-    _leaf_node_capabilities: Option<Vec<u8>>,
-    // lifetime: Option<u64>,
+    _leaf_node_capabilities: Option<Capabilities>,
+    _lifetime: Option<u64>,
 ) -> Result<MlsMessage, PlatformError> {
     unimplemented!()
 }
-// TODO: When do we signal the app that the signature identity has changed ?
 
 ///
 /// Process Welcome message.
 ///
-
-// TODO: Expose auditable
-pub struct PendingJoinState {
-    identifier: Vec<u8>,
-}
-
-// pub fn mls_group_process_welcome(
-//     pstate: &PlatformState,
-//     myself: &Identity,
-//     welcome: MlsMessage,
-//     ratchet_tree: Option<ExportedTree<'static>>,
-// ) -> Result<PendingJoinState, PlatformError> {
-//     let client = pstate.client_default(myself)?;
-//     let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
-//     let gid = group.group_id().to_vec();
-
-//     // Store the state
-//     group.write_to_storage()?;
-
-//     // Return the group identifier
-//     Ok(gid)
-// }
-
-// pub fn mls_group_inspect_welcome(
-//     pstate: &PlatformState,
-//     myself: &Identity,
-//     welcome: MlsMessage,
-//     ratchet_tree: Option<ExportedTree<'static>>,
-// ) -> Result<PendingJoinState, PlatformError> {
-//     unimplemented!()
-// }
 
 pub fn mls_group_confirm_join(
     pstate: &PlatformState,
@@ -727,26 +670,10 @@ pub fn mls_group_confirm_join(
 }
 
 ///
-/// Leave a group.
-///
-// TODO: Do we keep this ?
-pub fn mls_group_propose_leave(
-    pstate: PlatformState,
-    gid: GroupId,
-    myself: &Identity,
-) -> Result<mls_rs::MlsMessage, PlatformError> {
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
-    let self_index = group.current_member_index();
-    let proposal = group.propose_remove(self_index, vec![])?;
-
-    Ok(proposal)
-}
-
-///
 /// Close a group by removing all members.
 ///
 
-// TODO would this be better with a custom proposal? <- Yes.
+// TODO: Define a custom proposal instead.
 pub fn mls_group_close(
     pstate: PlatformState,
     gid: GroupId,
@@ -777,16 +704,7 @@ pub fn mls_group_close(
 }
 
 ///
-/// Process a non-Welcome message from the app.
-///
-/// Note: when the higher level APIs (e.g., Java in case of Android) receives a message,
-/// it checks with the apps via callbacks whether the apps want to proceed with the message
-/// (e.g., if the message is a Commit, the app might not want to apply it due to ACL).
-/// That means the moment a message is passed down to this Rust layer, it'll be processed
-/// as prescribed by MLS:
-///  - A Proposal will result in a Commit.
-///  - A Commit will result in it being applied to advance the group state.
-///  - An application message will result in it being decrypted.
+/// Receive a message
 ///
 
 pub fn mls_receive(
@@ -875,6 +793,15 @@ pub fn mls_send_custom_proposal(
 ///
 /// Export a group secret.
 ///
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct MlsExporterOutput {
+    epoch: u64,
+    exporter: Vec<u8>,
+}
+
+pub type MlsExporterOutputJsonBytes = Vec<u8>;
+
 pub fn mls_export(
     pstate: &PlatformState,
     gid: &GroupId,
@@ -882,13 +809,24 @@ pub fn mls_export(
     label: &[u8],
     context: &[u8],
     len: u64,
-    // TODO: epoch_number: Option<u64>, this is not supported in the current version of mls-rs
-) -> Result<(Vec<u8>, u64), PlatformError> {
+) -> Result<MlsExporterOutputJsonBytes, PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
     let secret = group
         .export_secret(label, context, (len as u64).try_into().unwrap())?
         .to_vec();
-    Ok((secret, group.current_epoch()))
+
+    // Construct the output object
+    let epoch_and_exporter = MlsExporterOutput {
+        epoch: group.current_epoch(),
+        exporter: secret,
+    };
+
+    // Encode the value as Json Bytes
+    let json_string = serde_json::to_string(&epoch_and_exporter)
+        .map_err(|_| PlatformError::JsonConversionError)?;
+    let json_bytes = json_string.as_bytes().to_vec();
+
+    Ok(json_bytes)
 }
 
 ///
