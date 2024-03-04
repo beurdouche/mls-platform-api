@@ -476,7 +476,7 @@ pub fn mls_group_remove(
     myself: &Identity,
     removed: &Identity, // TODO: Make this Vec<Identities>?
 ) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -524,7 +524,7 @@ pub fn mls_group_propose_remove(
     myself: &Identity,
     removed: &Identity, // TODO: Handle Vec<Identity>
 ) -> Result<MlsMessage, PlatformError> {
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -812,7 +812,7 @@ pub fn mls_export(
 ) -> Result<MlsExporterOutputJsonBytes, PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
     let secret = group
-        .export_secret(label, context, (len as u64).try_into().unwrap())?
+        .export_secret(label, context, len.try_into().unwrap())?
         .to_vec();
 
     // Construct the output object
@@ -874,7 +874,7 @@ fn convert_bytes_fields_to_hex(input_str: &str) -> Result<String, Error> {
 }
 
 // This function accepts bytes, converts them to a string, and then processes the string.
-pub fn to_string_custom(input_bytes: &[u8]) -> Result<String, PlatformError> {
+pub fn utils_json_bytes_to_string_custom(input_bytes: &[u8]) -> Result<String, PlatformError> {
     // Convert input bytes to a string
     let input_str =
         std::str::from_utf8(input_bytes).map_err(|_| PlatformError::JsonConversionError)?;

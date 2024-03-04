@@ -41,7 +41,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Create Key Package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(
-        &mut state_bob,
+        &state_bob,
         bob_id.clone(),
         bob_cred,
         None,
@@ -52,7 +52,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Create Key Package for Charlie
     let charlie_kp = mls_platform_api::mls_generate_key_package(
-        &mut state_charlie,
+        &state_charlie,
         charlie_id.clone(),
         charlie_cred,
         None,
@@ -78,7 +78,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_alice, &gid, &alice_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, before adding bob): {members_str:?}");
 
     // Alice adds Bob to a group
@@ -90,7 +90,7 @@ fn main() -> Result<(), PlatformError> {
 
     let welcome = commit_output
         .welcome
-        .get(0)
+        .first()
         .expect("No welcome messages found")
         .clone();
 
@@ -98,7 +98,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_alice, &gid, &alice_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, after adding bob): {members_str:?}");
 
     // Bob joins
@@ -106,7 +106,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_alice, &gid, &alice_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after joining the group): {members_str:?}");
 
     // Bob sends message to alice
@@ -131,7 +131,7 @@ fn main() -> Result<(), PlatformError> {
     let commit_2 = commit_2_output.commit;
     let welcome_2 = commit_2_output
         .welcome
-        .get(0)
+        .first()
         .expect("No welcome messages found")
         .clone();
 
@@ -139,7 +139,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_bob, &gid, &bob_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after adding charlie): {members_str:?}");
 
     // Alice receives the commit
@@ -155,12 +155,12 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_charlie, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (charlie, after joining the group): {members_str:?}");
 
     // Charlie removes Alice from the group
     let commit_output_3_bytes =
-        mls_platform_api::mls_group_remove(&mut state_charlie, &gid, &charlie_id, &alice_id)?;
+        mls_platform_api::mls_group_remove(&state_charlie, &gid, &charlie_id, &alice_id)?;
 
     let commit_3_output: mls_platform_api::MlsCommitOutput =
         from_slice(&commit_output_3_bytes).expect("Failed to deserialize MlsCommitOutput");
@@ -170,7 +170,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(&state_charlie, &gid, &charlie_id, MlsMessageOrAck::Ack)?;
 
     let members = mls_platform_api::mls_members(&state_charlie, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (charlie, after removing alice): {members_str:?}");
 
     // Alice receives the commit from Charlie
@@ -182,7 +182,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_members(&state_bob, &gid, &bob_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, after receiving alice's removal the group): {members_str:?}");
     // TODO: Alice should probably delete the group from the state before this point
 
@@ -195,7 +195,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_members(&state_bob, &gid, &bob_id)?;
-    let members_str = mls_platform_api::to_string_custom(&members)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after receiving alice's removal the group): {members_str:?}");
 
     // Generate an exporter for the Group
@@ -207,7 +207,8 @@ fn main() -> Result<(), PlatformError> {
         "exporter context".as_bytes(),
         32,
     )?;
-    dbg!(format!("{exporter:?}"));
+    let exporter_str = mls_platform_api::utils_json_bytes_to_string_custom(&exporter)?;
+    println!("Exporter: {exporter_str:?}");
 
     Ok(())
 }
