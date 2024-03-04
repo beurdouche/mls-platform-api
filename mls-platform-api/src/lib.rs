@@ -7,7 +7,12 @@ use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
 use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
 
+use serde::de::{self, MapAccess, Visitor};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 pub use state::{PlatformState, TemporaryState};
+use std::fmt;
 
 pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
 pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
@@ -55,6 +60,8 @@ pub enum PlatformError {
     UnavailableSecret,
     #[error("MutexError")]
     MutexError,
+    #[error("JsonConversionError")]
+    JsonConversionError,
     #[error(transparent)]
     MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
     #[error(transparent)]
@@ -105,8 +112,6 @@ impl Default for GroupConfig {
 ///
 /// Generate a credential.
 ///
-
-// ? Do we want to keep this at all ?
 pub fn mls_generate_credential_basic(name: &str) -> Result<Credential, PlatformError> {
     let credential =
         mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec()).into_credential();
@@ -156,15 +161,12 @@ pub fn mls_generate_signature_keypair(
 pub fn mls_generate_key_package(
     state: &PlatformState,
     myself: Identity,
-    // Below is group config
-    // cs: CipherSuite, <- // TODO: Should we remove this ?
     credential: Credential,
-    // version: ProtocolVersion, <- Avoid app to set this, the platform should set it
     // Below is client config
     key_package_extensions: Option<ExtensionList>,
     leaf_node_extensions: Option<ExtensionList>,
     leaf_node_capabilities: Option<Capabilities>,
-    // lifetime: Option<u64>,
+    _lifetime: Option<u64>,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
     // Decode the Credential
@@ -193,17 +195,21 @@ pub fn mls_generate_key_package(
 /// Get group members.
 ///
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsMembers {
     epoch: u64,
     identities: Vec<(Identity, Credential)>,
 }
 
+pub type MlsMembersJsonBytes = Vec<u8>;
+
+// Note: The identity is needed because it is allowed to have multiple
+//       identities in a group.
 pub fn mls_members(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<MlsMembers, PlatformError> {
+) -> Result<MlsMembersJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     let group = state.client_default(myself)?.load_group(gid)?;
@@ -227,66 +233,32 @@ pub fn mls_members(
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
-    let res = MlsMembers { epoch, identities };
+    let members = MlsMembers { epoch, identities };
 
-    Ok(res)
-    // serde_json::to_string(&res)?.as_bytes()
+    // Encode the message as Json Bytes
+    let members_json_string =
+        serde_json::to_string(&members).map_err(|_| PlatformError::JsonConversionError)?;
+    let members_json_bytes = members_json_string.as_bytes().to_vec();
+
+    Ok(members_json_bytes)
 }
-
-///
-/// Get the current epoch.
-///
-
-pub type GroupContext = Vec<u8>; // TODO
-
-pub fn mls_group_context(
-    _state: &PlatformState,
-    _gid: &GroupId,
-    _myself: &Identity,
-) -> Result<GroupContext, PlatformError> {
-    unimplemented!()
-    // return Json(GroupContext {
-    // ...
-    // });
-}
-
-// ///
-// /// Get the Identity from a SigningIdentity.
-// ///
-// pub fn mls_identity(
-//     signing_identity: &SigningIdentity,
-//     // cs: CipherSuite,
-// ) -> Result<Identity, MlsError> {
-//     let identity_bytes = DefaultIdentityProvider::new()
-//         .identity(&signing_identity, &Default::default())
-//         .map_err(|e| MlsError::IdentityError(e.into_any_error()))?;
-//     Ok(identity_bytes)
-//     // DefaultCryptoProvider::default()
-//     //     .cipher_suite_provider(cs)
-//     //     .ok_or(MlsError::UnsupportedCiphersuite)?
-//     //     .hash(&signing_identity.mls_encode_to_vec()?)
-//     //     .map(Identity)
-//     //     .map_err(|e| MlsError::IdentityError(e.into_any_error()))
-// }
 
 ///
 /// Group management: Create a Group
 ///
 
-// version: ProtocolVersion, <- Avoid app to set this, the platform should set it
+// TODO: We internally set the protocol version to avoid issues with
 
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
     credential: Credential,
     gid: Option<GroupId>,
-    // Group config
-    // cs: CipherSuite, <- TODO: Remove ?
     // Client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
     _leaf_node_capabilities: Option<Capabilities>,
-    // lifetime: Option<u64>,
+    _lifetime: Option<u64>,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
@@ -325,6 +297,7 @@ pub fn mls_group_create(
 /// Group management: Adding a user.
 ///
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct MlsCommitOutput {
     pub commit: MlsMessage,
     pub welcome: Vec<MlsMessage>,
@@ -333,17 +306,131 @@ pub struct MlsCommitOutput {
     // pub unused_proposals: Vec<crate::mls_rules::ProposalInfo<Proposal>>, from mls_rs
 }
 
+impl Serialize for MlsCommitOutput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MlsCommitOutput", 4)?;
+
+        // Handle serialization for `commit`
+        let commit_bytes = self
+            .commit
+            .mls_encode_to_vec()
+            .map_err(serde::ser::Error::custom)?;
+        state.serialize_field("commit", &commit_bytes)?;
+
+        // Handle serialization for `welcome`. Collect into a Result to handle potential errors.
+        let welcome_bytes: Result<Vec<_>, _> = self
+            .welcome
+            .iter()
+            .map(|msg| msg.mls_encode_to_vec().map_err(serde::ser::Error::custom))
+            .collect();
+        // Unwrap the Result here, after all potential errors have been handled.
+        state.serialize_field("welcome", &welcome_bytes?)?;
+
+        // Handle serialization for `group_info`
+        let group_info_bytes = match self.group_info.as_ref().map(|gi| gi.mls_encode_to_vec()) {
+            Some(Ok(bytes)) => Some(bytes),
+            Some(Err(e)) => return Err(serde::ser::Error::custom(e)),
+            None => None,
+        };
+        state.serialize_field("group_info", &group_info_bytes)?;
+
+        // Directly serialize `ratchet_tree` as it is already an Option<Vec<u8>>
+        state.serialize_field("ratchet_tree", &self.ratchet_tree)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for MlsCommitOutput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MlsCommitOutputVisitor;
+
+        impl<'de> Visitor<'de> for MlsCommitOutputVisitor {
+            type Value = MlsCommitOutput;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct MlsCommitOutput")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<MlsCommitOutput, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut commit = None;
+                let mut welcome = None;
+                let mut group_info = None;
+                let mut ratchet_tree = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "commit" => {
+                            let value: Vec<u8> = map.next_value()?;
+                            commit = Some(
+                                MlsMessage::mls_decode(&mut &value[..])
+                                    .map_err(de::Error::custom)?,
+                            );
+                        }
+                        "welcome" => {
+                            let values: Vec<Vec<u8>> = map.next_value()?;
+                            welcome = Some(
+                                values
+                                    .into_iter()
+                                    .map(|v| {
+                                        MlsMessage::mls_decode(&mut &v[..])
+                                            .map_err(de::Error::custom)
+                                    })
+                                    .collect::<Result<_, _>>()?,
+                            );
+                        }
+                        "group_info" => {
+                            if let Some(value) = map.next_value::<Option<Vec<u8>>>()? {
+                                group_info = Some(
+                                    MlsMessage::mls_decode(&mut &value[..])
+                                        .map_err(de::Error::custom)?,
+                                );
+                            }
+                        }
+                        "ratchet_tree" => {
+                            ratchet_tree = map.next_value()?;
+                        }
+                        _ => { /* Ignore unknown fields */ }
+                    }
+                }
+
+                Ok(MlsCommitOutput {
+                    commit: commit.ok_or_else(|| de::Error::missing_field("commit"))?,
+                    welcome: welcome.ok_or_else(|| de::Error::missing_field("welcome"))?,
+                    group_info,
+                    ratchet_tree,
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] =
+            &["commit", "welcome", "group_info", "ratchet_tree"];
+        deserializer.deserialize_struct("MlsCommitOutput", FIELDS, MlsCommitOutputVisitor)
+    }
+}
+
+pub type MlsCommitOutputJsonBytes = Vec<u8>;
+
 pub fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
     myself: &Identity,
     new_members: Vec<MlsMessage>,
-) -> Result<Vec<MlsCommitOutput>, PlatformError> {
+) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
     // Get the group from the state
     let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
 
-    let mut commit_output = new_members
+    let commit_output = new_members
         .into_iter()
         .try_fold(group.commit_builder(), |commit_builder, user| {
             commit_builder.add_member(user)
@@ -351,19 +438,24 @@ pub fn mls_group_add(
         .build()?;
 
     // We use the default mode which returns only one welcome message
-    let welcome = commit_output.welcome_messages.remove(0);
+    let welcomes = commit_output.welcome_messages; //.remove(0);
 
     let commit_output = MlsCommitOutput {
         commit: commit_output.commit_message.clone(),
-        welcome: vec![welcome], // TODO: This could be the direct mapping
+        welcome: welcomes,
         group_info: commit_output.external_commit_group_info,
-        ratchet_tree: None, // TODO: Is this ok for that welcome mode ?
+        ratchet_tree: None, // TODO: Handle this !
     };
 
     // Write the group to the storage
     group.write_to_storage()?;
 
-    Ok(vec![commit_output])
+    // Encode the message as Json Bytes
+    let js_string =
+        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
+    let js_bytes = js_string.as_bytes().to_vec();
+
+    Ok(js_bytes)
 }
 
 pub fn mls_group_propose_add(
@@ -380,11 +472,11 @@ pub fn mls_group_propose_add(
 ///
 pub fn mls_group_remove(
     pstate: &PlatformState,
-    gid: GroupId,
+    gid: &GroupId,
     myself: &Identity,
-    removed: Identity, // TODO: Make this Vec<Identities>?
-) -> Result<MlsCommitOutput, PlatformError> {
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
+    removed: &Identity, // TODO: Make this Vec<Identities>?
+) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -399,11 +491,14 @@ pub fn mls_group_remove(
             let h = cipher_suite_provider
                 .hash(&m.signing_identity.signature_key)
                 .ok()?;
-            (h == removed).then_some(m.index)
+            (h == *removed).then_some(m.index)
         })
         .ok_or(PlatformError::UndefinedIdentity)?;
 
     let commit = group.commit_builder().remove_member(removed)?.build()?;
+
+    // Write the group to the storage
+    group.write_to_storage()?;
 
     let commit_output = MlsCommitOutput {
         commit: commit.commit_message,
@@ -415,16 +510,21 @@ pub fn mls_group_remove(
             .transpose()?,
     };
 
-    Ok(commit_output)
+    // Encode the message as Json Bytes
+    let json_string =
+        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
+    let json_bytes = json_string.as_bytes().to_vec();
+
+    Ok(json_bytes)
 }
 
 pub fn mls_group_propose_remove(
     pstate: &PlatformState,
-    gid: GroupId,
+    gid: &GroupId,
     myself: &Identity,
-    removed: Identity, // TODO: Handle Vec<Identity>
+    removed: &Identity, // TODO: Handle Vec<Identity>
 ) -> Result<MlsMessage, PlatformError> {
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -439,7 +539,7 @@ pub fn mls_group_propose_remove(
             let h = cipher_suite_provider
                 .hash(&m.signing_identity.signature_key)
                 .ok()?;
-            (h == removed).then_some(m.index)
+            (h == *removed).then_some(m.index)
         })
         .ok_or(PlatformError::UndefinedIdentity)?;
 
@@ -451,12 +551,15 @@ pub fn mls_group_propose_remove(
 /// Key updates
 ///
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsGroupUpdate {
     identity: Identity,
     commit_output: MlsCommitOutput,
 }
 
-/// Possibly add a random nonce as an optional parameter.
+pub type MlsGroupUpdateJsonBytes = Vec<u8>;
+
+/// TODO: Possibly add a random nonce as an optional parameter.
 pub fn mls_group_update(
     pstate: &mut PlatformState,
     gid: GroupId,
@@ -466,10 +569,9 @@ pub fn mls_group_update(
     // Below is client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
-    // TODO: Define type for capabilities
-    _leaf_node_capabilities: Option<Vec<u8>>,
-    // lifetime: Option<u64>,
-) -> Result<MlsGroupUpdate, PlatformError> {
+    _leaf_node_capabilities: Option<Capabilities>,
+    _lifetime: Option<u64>,
+) -> Result<MlsGroupUpdateJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     // Propose + Commit
@@ -523,7 +625,13 @@ pub fn mls_group_update(
         identity,
         commit_output,
     };
-    Ok(group_update)
+
+    // Encode the message as Json Bytes
+    let json_string =
+        serde_json::to_string(&group_update).map_err(|_| PlatformError::JsonConversionError)?;
+    let json_bytes = json_string.as_bytes().to_vec();
+
+    Ok(json_bytes)
 }
 
 pub fn mls_group_propose_update(
@@ -534,48 +642,15 @@ pub fn mls_group_propose_update(
     // Below is client config
     _group_context_extensions: Option<ExtensionList>,
     _leaf_node_extensions: Option<ExtensionList>,
-    // TODO: Define type for capabilities
-    _leaf_node_capabilities: Option<Vec<u8>>,
-    // lifetime: Option<u64>,
+    _leaf_node_capabilities: Option<Capabilities>,
+    _lifetime: Option<u64>,
 ) -> Result<MlsMessage, PlatformError> {
     unimplemented!()
 }
-// TODO: When do we signal the app that the signature identity has changed ?
 
 ///
 /// Process Welcome message.
 ///
-
-// TODO: Expose auditable
-pub struct PendingJoinState {
-    identifier: Vec<u8>,
-}
-
-// pub fn mls_group_process_welcome(
-//     pstate: &PlatformState,
-//     myself: &Identity,
-//     welcome: MlsMessage,
-//     ratchet_tree: Option<ExportedTree<'static>>,
-// ) -> Result<PendingJoinState, PlatformError> {
-//     let client = pstate.client_default(myself)?;
-//     let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
-//     let gid = group.group_id().to_vec();
-
-//     // Store the state
-//     group.write_to_storage()?;
-
-//     // Return the group identifier
-//     Ok(gid)
-// }
-
-// pub fn mls_group_inspect_welcome(
-//     pstate: &PlatformState,
-//     myself: &Identity,
-//     welcome: MlsMessage,
-//     ratchet_tree: Option<ExportedTree<'static>>,
-// ) -> Result<PendingJoinState, PlatformError> {
-//     unimplemented!()
-// }
 
 pub fn mls_group_confirm_join(
     pstate: &PlatformState,
@@ -595,26 +670,10 @@ pub fn mls_group_confirm_join(
 }
 
 ///
-/// Leave a group.
-///
-// TODO: Do we keep this ?
-pub fn mls_group_propose_leave(
-    pstate: PlatformState,
-    gid: GroupId,
-    myself: &Identity,
-) -> Result<mls_rs::MlsMessage, PlatformError> {
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
-    let self_index = group.current_member_index();
-    let proposal = group.propose_remove(self_index, vec![])?;
-
-    Ok(proposal)
-}
-
-///
 /// Close a group by removing all members.
 ///
 
-// TODO would this be better with a custom proposal? <- Yes.
+// TODO: Define a custom proposal instead.
 pub fn mls_group_close(
     pstate: PlatformState,
     gid: GroupId,
@@ -645,16 +704,7 @@ pub fn mls_group_close(
 }
 
 ///
-/// Process a non-Welcome message from the app.
-///
-/// Note: when the higher level APIs (e.g., Java in case of Android) receives a message,
-/// it checks with the apps via callbacks whether the apps want to proceed with the message
-/// (e.g., if the message is a Commit, the app might not want to apply it due to ACL).
-/// That means the moment a message is passed down to this Rust layer, it'll be processed
-/// as prescribed by MLS:
-///  - A Proposal will result in a Commit.
-///  - A Commit will result in it being applied to advance the group state.
-///  - An application message will result in it being decrypted.
+/// Receive a message
 ///
 
 pub fn mls_receive(
@@ -743,6 +793,15 @@ pub fn mls_send_custom_proposal(
 ///
 /// Export a group secret.
 ///
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct MlsExporterOutput {
+    epoch: u64,
+    exporter: Vec<u8>,
+}
+
+pub type MlsExporterOutputJsonBytes = Vec<u8>;
+
 pub fn mls_export(
     pstate: &PlatformState,
     gid: &GroupId,
@@ -750,11 +809,76 @@ pub fn mls_export(
     label: &[u8],
     context: &[u8],
     len: u64,
-    // TODO: epoch_number: Option<u64>, this is not supported in the current version of mls-rs
-) -> Result<(Vec<u8>, u64), PlatformError> {
+) -> Result<MlsExporterOutputJsonBytes, PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
     let secret = group
-        .export_secret(label, context, (len as u64).try_into().unwrap())?
+        .export_secret(label, context, len.try_into().unwrap())?
         .to_vec();
-    Ok((secret, group.current_epoch()))
+
+    // Construct the output object
+    let epoch_and_exporter = MlsExporterOutput {
+        epoch: group.current_epoch(),
+        exporter: secret,
+    };
+
+    // Encode the value as Json Bytes
+    let json_string = serde_json::to_string(&epoch_and_exporter)
+        .map_err(|_| PlatformError::JsonConversionError)?;
+    let json_bytes = json_string.as_bytes().to_vec();
+
+    Ok(json_bytes)
+}
+
+///
+/// Utility functions
+///
+use serde_json::{Error, Value};
+
+// This function takes a JSON string and converts byte arrays into hex strings.
+fn convert_bytes_fields_to_hex(input_str: &str) -> Result<String, Error> {
+    // Parse the JSON string into a serde_json::Value
+    let mut value: Value = serde_json::from_str(input_str)?;
+
+    // Recursive function to process each element
+    fn process_element(element: &mut Value) {
+        match element {
+            Value::Array(ref mut vec) => {
+                if vec
+                    .iter()
+                    .all(|x| matches!(x, Value::Number(n) if n.is_u64()))
+                {
+                    // Convert all elements to a Vec<u8> if they are numbers
+                    let bytes: Vec<u8> = vec
+                        .iter()
+                        .filter_map(|x| x.as_u64().map(|n| n as u8))
+                        .collect();
+                    // Check if the conversion makes sense (the length matches)
+                    if bytes.len() == vec.len() {
+                        *element = Value::String(hex::encode(bytes));
+                    } else {
+                        vec.iter_mut().for_each(process_element);
+                    }
+                } else {
+                    vec.iter_mut().for_each(process_element);
+                }
+            }
+            Value::Object(ref mut map) => {
+                map.values_mut().for_each(process_element);
+            }
+            _ => {}
+        }
+    }
+    // Process the element and return the new Json string
+    process_element(&mut value);
+    serde_json::to_string(&value)
+}
+
+// This function accepts bytes, converts them to a string, and then processes the string.
+pub fn utils_json_bytes_to_string_custom(input_bytes: &[u8]) -> Result<String, PlatformError> {
+    // Convert input bytes to a string
+    let input_str =
+        std::str::from_utf8(input_bytes).map_err(|_| PlatformError::JsonConversionError)?;
+
+    // Call the original function with the decoded string
+    convert_bytes_fields_to_hex(input_str).map_err(|_| PlatformError::JsonConversionError)
 }

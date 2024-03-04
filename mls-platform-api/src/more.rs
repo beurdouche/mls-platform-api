@@ -1,4 +1,67 @@
 ///
+/// Get the current epoch.
+///
+
+pub type GroupContext = Vec<u8>;
+
+pub fn mls_group_context(
+    _state: &PlatformState,
+    _gid: &GroupId,
+    _myself: &Identity,
+) -> Result<GroupContext, PlatformError> {
+    unimplemented!()
+    // return Json(GroupContext {
+    // ...
+    // });
+}
+
+// TODO: Expose auditable
+pub struct PendingJoinState {
+    identifier: Vec<u8>,
+}
+
+pub fn mls_group_process_welcome(
+    pstate: &PlatformState,
+    myself: &Identity,
+    welcome: MlsMessage,
+    ratchet_tree: Option<ExportedTree<'static>>,
+) -> Result<PendingJoinState, PlatformError> {
+    let client = pstate.client_default(myself)?;
+    let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
+    let gid = group.group_id().to_vec();
+
+    // Store the state
+    group.write_to_storage()?;
+
+    // Return the group identifier
+    Ok(gid)
+}
+
+pub fn mls_group_inspect_welcome(
+    pstate: &PlatformState,
+    myself: &Identity,
+    welcome: MlsMessage,
+    ratchet_tree: Option<ExportedTree<'static>>,
+) -> Result<PendingJoinState, PlatformError> {
+    unimplemented!()
+}
+
+///
+/// Leave a group.
+///
+pub fn mls_group_propose_leave(
+    pstate: PlatformState,
+    gid: GroupId,
+    myself: &Identity,
+) -> Result<mls_rs::MlsMessage, PlatformError> {
+    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
+    let self_index = group.current_member_index();
+    let proposal = group.propose_remove(self_index, vec![])?;
+
+    Ok(proposal)
+}
+
+///
 /// Import a group state into the storage
 ///
 pub fn mls_import_group_state(
