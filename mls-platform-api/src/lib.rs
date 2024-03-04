@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Mozilla Corporation and contributors.
+// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+
 mod state;
 
 use mls_rs::error::{AnyError, IntoAnyError};

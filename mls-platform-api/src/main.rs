@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Mozilla Corporation and contributors.
+// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 

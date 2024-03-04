@@ -1,3 +1,6 @@
+// Copyright (c) 2024 Mozilla Corporation and contributors.
+// SPDX-License-Identifier: (Apache-2.0 OR MIT)
+
 use std::{
     collections::{hash_map::Entry, HashMap},
     convert::Infallible,
