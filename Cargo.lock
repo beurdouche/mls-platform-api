@@ -778,7 +778,7 @@ dependencies = [
 [[package]]
 name = "mls-rs"
 version = "0.38.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -807,7 +807,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec"
 version = "0.5.1"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "mls-rs-codec-derive",
  "thiserror",
@@ -817,7 +817,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -828,7 +828,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-core"
 version = "0.17.1"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "async-trait",
  "hex",
@@ -845,7 +845,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-hpke"
 version = "0.8.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -859,7 +859,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-rustcrypto"
 version = "0.9.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "aead",
  "aes-gcm",
@@ -889,7 +889,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-traits"
 version = "0.9.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -899,7 +899,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-identity-x509"
 version = "0.10.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -911,7 +911,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-provider-sqlite"
 version = "0.10.0"
-source = "git+https://github.com/awslabs/mls-rs#7d8c89864cdb22291a3249958a50aea4012733e0"
+source = "git+https://github.com/awslabs/mls-rs?rev=de125ef942564d3b4029eb0e4c3ab16656b1955d#de125ef942564d3b4029eb0e4c3ab16656b1955d"
 dependencies = [
  "async-trait",
  "hex",
