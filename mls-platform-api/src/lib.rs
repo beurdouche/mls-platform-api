@@ -17,7 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::{PlatformState, TemporaryState};
 use std::fmt;
 
-pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
+pub type DefaultCryptoProvider = mls_rs_crypto_awslc::AwsLcKyberCryptoProvider;
 pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
 
 // Re-export the mls_rs types
@@ -103,7 +103,7 @@ impl Default for GroupConfig {
     fn default() -> Self {
         GroupConfig {
             // Set default ciphersuite.
-            ciphersuite: CipherSuite::CURVE25519_AES128,
+            ciphersuite: CipherSuite::CUSTOM_KYBER512,
             // Set default protocol version.
             version: ProtocolVersion::MLS_10,
             // Set default options.

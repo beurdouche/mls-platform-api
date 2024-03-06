@@ -14,11 +14,12 @@ use mls_rs::{
     error::IntoAnyError,
     group::Capabilities,
     identity::{Credential, SigningIdentity},
-    mls_rs_codec::{MlsDecode, MlsEncode},
-    storage_provider::{EpochRecord, GroupState, KeyPackageData},
+    mls_rs_codec::MlsEncode,
+    storage_provider::KeyPackageData,
     CipherSuite, Client, ExtensionList, GroupStateStorage, KeyPackageStorage, ProtocolVersion,
 };
 
+use mls_rs_core::group::{EpochRecord, GroupState};
 use mls_rs_provider_sqlite::{
     connection_strategy::{
         CipheredConnectionStrategy, ConnectionStrategy, FileConnectionStrategy, SqlCipherConfig,
@@ -27,7 +28,7 @@ use mls_rs_provider_sqlite::{
     SqLiteDataStorageEngine,
 };
 
-use crate::{GroupConfig, Identity, PlatformError};
+use crate::{DefaultCryptoProvider, GroupConfig, Identity, PlatformError};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GroupData {
@@ -86,7 +87,7 @@ impl PlatformState {
         _group_context_extensions: Option<ExtensionList>,
         _capabilities: Option<Capabilities>,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let crypto_provider = DefaultCryptoProvider::default();
         let engine = self.get_sqlite_engine()?;
 
         let mut myself_sig_data = self
@@ -239,7 +240,7 @@ impl TemporaryState {
         myself: SigningIdentity,
         group_config: Option<GroupConfig>,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let crypto_provider = DefaultCryptoProvider::default();
         let myself_sigkey = self.get_sigkey(&myself)?;
 
         let mut builder = mls_rs::client_builder::ClientBuilder::new()
@@ -303,66 +304,52 @@ impl GroupStateStorage for TemporaryState {
             .and_then(|group_data| group_data.epoch_data.keys().max().copied()))
     }
 
-    fn state<T>(&self, group_id: &[u8]) -> Result<Option<T>, Self::Error>
-    where
-        T: GroupState + MlsDecode,
-    {
-        self.groups
+    fn state(&self, group_id: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self
+            .groups
             .lock()
             .unwrap()
             .get(group_id)
-            .map(|v| T::mls_decode(&mut v.state_data.as_slice()))
-            .transpose()
-            .map_err(Into::into)
+            .map(|v| v.state_data.clone()))
     }
 
-    fn epoch<T>(&self, group_id: &[u8], epoch_id: u64) -> Result<Option<T>, Self::Error>
-    where
-        T: EpochRecord + MlsEncode + MlsDecode,
-    {
-        self.groups
+    fn epoch(&self, group_id: &[u8], epoch_id: u64) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self
+            .groups
             .lock()
             .unwrap()
             .get(group_id)
             .and_then(|group_data| group_data.epoch_data.get(&epoch_id))
-            .map(|v| T::mls_decode(&mut &v[..]))
-            .transpose()
-            .map_err(Into::into)
+            .map(|v| v.clone()))
     }
 
-    fn write<ST, ET>(
+    fn write(
         &mut self,
-        state: ST,
-        epoch_inserts: Vec<ET>,
-        epoch_updates: Vec<ET>,
-    ) -> Result<(), Self::Error>
-    where
-        ST: GroupState + MlsEncode + MlsDecode + Send + Sync,
-        ET: EpochRecord + MlsEncode + MlsDecode + Send + Sync,
-    {
-        let state_data = state.mls_encode_to_vec()?;
+        state: GroupState,
+        epoch_inserts: Vec<EpochRecord>,
+        epoch_updates: Vec<EpochRecord>,
+    ) -> Result<(), Self::Error> {
         let mut states = self.groups.lock().unwrap();
 
-        let group_data = match states.entry(state.id()) {
+        let group_data = match states.entry(state.id) {
             Entry::Occupied(entry) => {
                 let data = entry.into_mut();
-                data.state_data = state_data;
+                data.state_data = state.data;
                 data
             }
             Entry::Vacant(entry) => entry.insert(GroupData {
-                state_data,
+                state_data: state.data,
                 epoch_data: Default::default(),
             }),
         };
 
-        epoch_inserts.into_iter().try_for_each(|e| {
-            group_data.epoch_data.insert(e.id(), e.mls_encode_to_vec()?);
-            Ok::<_, Self::Error>(())
-        })?;
+        epoch_inserts.into_iter().for_each(|e| {
+            group_data.epoch_data.insert(e.id, e.data);
+        });
 
         epoch_updates.into_iter().try_for_each(|e| {
-            if let Some(data) = group_data.epoch_data.get_mut(&e.id()) {
-                *data = e.mls_encode_to_vec()?;
+            if let Some(data) = group_data.epoch_data.get_mut(&e.id) {
+                *data = e.data;
             };
 
             Ok::<_, Self::Error>(())
