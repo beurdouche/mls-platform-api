@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mls-rs =  {git = "https://github.com/awslabs/mls-rs", rev = "de125ef942564d3b4029eb0e4c3ab16656b1955d", features = ["sqlcipher-bundled", "serde"] }
-mls-rs-crypto-rustcrypto = {git = "https://github.com/awslabs/mls-rs", rev = "de125ef942564d3b4029eb0e4c3ab16656b1955d"}
-mls-rs-provider-sqlite = {git = "https://github.com/awslabs/mls-rs", rev = "de125ef942564d3b4029eb0e4c3ab16656b1955d"}
+mls-rs =  {git = "https://github.com/beurdouche/mls-rs", rev = "5f9f62d4d2a5f33d97681d79abaac967b1d0532c", features = ["sqlcipher-bundled", "serde"] }
+mls-rs-crypto-rustcrypto = {git = "https://github.com/beurdouche/mls-rs", rev = "5f9f62d4d2a5f33d97681d79abaac967b1d0532c"}
+mls-rs-provider-sqlite = {git = "https://github.com/beurdouche/mls-rs", rev = "5f9f62d4d2a5f33d97681d79abaac967b1d0532c"}
 hex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["alloc", "derive", "rc"] }
 bincode = "1.3"
