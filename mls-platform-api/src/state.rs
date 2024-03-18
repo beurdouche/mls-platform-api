@@ -86,7 +86,7 @@ impl PlatformState {
         _group_context_extensions: Option<ExtensionList>,
         _capabilities: Option<Capabilities>,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
         let engine = self.get_sqlite_engine()?;
 
         let mut myself_sig_data = self
@@ -239,7 +239,7 @@ impl TemporaryState {
         myself: SigningIdentity,
         group_config: Option<GroupConfig>,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
         let myself_sigkey = self.get_sigkey(&myself)?;
 
         let mut builder = mls_rs::client_builder::ClientBuilder::new()

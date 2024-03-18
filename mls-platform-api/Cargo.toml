@@ -4,12 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-mls-rs =  {git = "https://github.com/beurdouche/mls-rs", rev = "5f9f62d4d2a5f33d97681d79abaac967b1d0532c", features = ["sqlcipher-bundled", "serde"] }
-mls-rs-crypto-rustcrypto = {git = "https://github.com/beurdouche/mls-rs", rev = "5f9f62d4d2a5f33d97681d79abaac967b1d0532c"}
-mls-rs-provider-sqlite = {git = "https://github.com/beurdouche/mls-rs", rev = "5f9f62d4d2a5f33d97681d79abaac967b1d0532c"}
+mls-rs =  {git = "https://github.com/beurdouche/mls-rs", rev = "ba784fb2ecd4832683ece9c62f00572914372cb3", features = ["sqlcipher-bundled", "serde"] }
+mls-rs-crypto-nss = {git = "https://github.com/beurdouche/mls-rs", rev = "ba784fb2ecd4832683ece9c62f00572914372cb3"}
+mls-rs-provider-sqlite = {git = "https://github.com/beurdouche/mls-rs", rev = "ba784fb2ecd4832683ece9c62f00572914372cb3"}
 hex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["alloc", "derive", "rc"] }
 bincode = "1.3"

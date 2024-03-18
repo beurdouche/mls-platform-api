@@ -17,7 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::{PlatformState, TemporaryState};
 use std::fmt;
 
-pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
+pub type DefaultCryptoProvider = mls_rs_crypto_nss::NssCryptoProvider;
 pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
 
 // Re-export the mls_rs types
