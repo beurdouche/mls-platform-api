@@ -804,7 +804,7 @@ dependencies = [
 [[package]]
 name = "mls-rs"
 version = "0.38.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -829,7 +829,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec"
 version = "0.5.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "mls-rs-codec-derive",
  "thiserror",
@@ -839,7 +839,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -850,7 +850,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-core"
 version = "0.17.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "async-trait",
  "hex",
@@ -866,7 +866,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-hpke"
 version = "0.8.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -880,7 +880,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-nss"
 version = "0.1.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "aead",
  "aes-gcm",
@@ -908,7 +908,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-traits"
 version = "0.9.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -918,7 +918,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-identity-x509"
 version = "0.10.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -930,7 +930,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-provider-sqlite"
 version = "0.10.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=ba784fb2ecd4832683ece9c62f00572914372cb3#ba784fb2ecd4832683ece9c62f00572914372cb3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6#9b6065e3f53ad7ed2a24998da3cd0a30a1b264e6"
 dependencies = [
  "async-trait",
  "hex",
@@ -955,7 +955,7 @@ dependencies = [
 [[package]]
 name = "nss_gk"
 version = "0.4.0"
-source = "git+https://github.com/beurdouche/nss-gk-api?rev=503931aed0967ce5379b30b7c5b8db525d07e82d#503931aed0967ce5379b30b7c5b8db525d07e82d"
+source = "git+https://github.com/beurdouche/nss-gk-api?rev=e863e5dcb8990e883a740d98810e8c0e559e2907#e863e5dcb8990e883a740d98810e8c0e559e2907"
 dependencies = [
  "bindgen",
  "log",
