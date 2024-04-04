@@ -9,6 +9,7 @@ gecko = ["mls-rs-crypto-nss/gecko"]
 
 [dependencies]
 mls-rs =  {git = "https://github.com/beurdouche/mls-rs", rev = "b235e70c76b64ec9169f0b49c0ea2c1f1f56f41c", features = ["sqlcipher-bundled", "serde"] }
+# mls-rs-core =  {git = "https://github.com/beurdouche/mls-rs", rev = "b235e70c76b64ec9169f0b49c0ea2c1f1f56f41c"}
 mls-rs-crypto-nss = {git = "https://github.com/beurdouche/mls-rs", rev = "b235e70c76b64ec9169f0b49c0ea2c1f1f56f41c"}
 mls-rs-provider-sqlite = {git = "https://github.com/beurdouche/mls-rs", rev = "b235e70c76b64ec9169f0b49c0ea2c1f1f56f41c"}
 hex = { version = "0.4", features = ["serde"] }
