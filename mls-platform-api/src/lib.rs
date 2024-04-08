@@ -88,6 +88,10 @@ pub fn state_delete(name: String) -> Result<(), PlatformError> {
 }
 
 ///
+/// TODO: List groups
+///
+
+///
 /// Group Configuration
 ///
 
@@ -149,8 +153,8 @@ pub fn mls_generate_signature_keypair(
         .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
     // Print the signature key
-    println!("Signature Secret Key: {:?}", hex::encode(&signature_key));
-    println!("Signature Identifier: {:?}", hex::encode(&identifier));
+    // println!("Signature Secret Key: {:?}", hex::encode(&signature_key));
+    // println!("Signature Identifier: {:?}", hex::encode(&identifier));
 
     // Store the signature key pair.
     let _ = state.insert_sigkey(&signature_key, &signature_pubkey, cs, &identifier);
@@ -200,8 +204,10 @@ pub fn mls_generate_key_package(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsMembers {
+    // group_id
     epoch: u64,
     identities: Vec<(Identity, Credential)>,
+    // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
 pub type MlsMembersJsonBytes = Vec<u8>;
@@ -285,8 +291,8 @@ pub fn mls_group_create(
     };
 
     // Create the group
-    group.commit(Vec::new())?;
-    group.apply_pending_commit()?;
+    // group.commit(Vec::new())?;
+    // group.apply_pending_commit()?;
 
     // The state needs to be returned or stored somewhere
     group.write_to_storage()?;
@@ -497,6 +503,7 @@ pub fn mls_group_remove(
             (h == *removed).then_some(m.index)
         })
         .ok_or(PlatformError::UndefinedIdentity)?;
+    // Handle separate error message for inability to remove yourself
 
     let commit = group.commit_builder().remove_member(removed)?.build()?;
 
@@ -650,6 +657,14 @@ pub fn mls_group_propose_update(
 ) -> Result<MlsMessage, PlatformError> {
     unimplemented!()
 }
+
+///
+/// TODO: Pending commit API
+///
+
+// List pending
+// Apply pending
+// Discard pending
 
 ///
 /// Process Welcome message.
