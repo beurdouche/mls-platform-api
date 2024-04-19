@@ -1,3 +1,3 @@
 # mls-platform-api
 
-The main branch is what is being used by Firefox.
+Experimental Rust platform API that can be used to build the MLS functions in Firefox
