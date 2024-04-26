@@ -47,10 +47,7 @@ fn main() -> Result<(), PlatformError> {
         &state_bob,
         bob_id.clone(),
         bob_cred,
-        None,
-        None,
-        None,
-        None,
+        Default::default(),
     )?;
 
     // Create Key Package for Charlie
@@ -58,10 +55,7 @@ fn main() -> Result<(), PlatformError> {
         &state_charlie,
         charlie_id.clone(),
         charlie_cred,
-        None,
-        None,
-        None,
-        None,
+        Default::default(),
     )?;
     dbg!(format!("{charlie_kp:?}"));
 
@@ -72,9 +66,7 @@ fn main() -> Result<(), PlatformError> {
         alice_cred,
         None,
         None,
-        None,
-        None,
-        None,
+        Default::default(),
     )?;
 
     dbg!("Group created", hex::encode(&gid));
@@ -97,7 +89,7 @@ fn main() -> Result<(), PlatformError> {
         .expect("No welcome messages found")
         .clone();
 
-    mls_platform_api::mls_receive(&state_alice, &gid, &alice_id, MlsMessageOrAck::Ack)?;
+    mls_platform_api::mls_receive(&state_alice, &alice_id, MlsMessageOrAck::Ack(gid.to_vec()))?;
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_alice, &gid, &alice_id)?;
@@ -118,7 +110,6 @@ fn main() -> Result<(), PlatformError> {
     // Alice receives the message
     let message = mls_platform_api::mls_receive(
         &state_alice,
-        &gid,
         &alice_id,
         MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
@@ -138,7 +129,7 @@ fn main() -> Result<(), PlatformError> {
         .expect("No welcome messages found")
         .clone();
 
-    mls_platform_api::mls_receive(&state_bob, &gid, &bob_id, MlsMessageOrAck::Ack)?;
+    mls_platform_api::mls_receive(&state_bob, &bob_id, MlsMessageOrAck::Ack(bob_id.to_vec()))?;
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_bob, &gid, &bob_id)?;
@@ -148,7 +139,6 @@ fn main() -> Result<(), PlatformError> {
     // Alice receives the commit
     mls_platform_api::mls_receive(
         &state_alice,
-        &gid,
         &alice_id,
         MlsMessageOrAck::MlsMessage(commit_2),
     )?;
@@ -170,7 +160,11 @@ fn main() -> Result<(), PlatformError> {
 
     let commit_3 = commit_3_output.commit;
 
-    mls_platform_api::mls_receive(&state_charlie, &gid, &charlie_id, MlsMessageOrAck::Ack)?;
+    mls_platform_api::mls_receive(
+        &state_charlie,
+        &charlie_id,
+        MlsMessageOrAck::Ack(gid.to_vec()),
+    )?;
 
     let members = mls_platform_api::mls_members(&state_charlie, &gid, &charlie_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
@@ -179,7 +173,6 @@ fn main() -> Result<(), PlatformError> {
     // Alice receives the commit from Charlie
     let _ = mls_platform_api::mls_receive(
         &state_alice,
-        &gid,
         &alice_id,
         MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
@@ -192,7 +185,6 @@ fn main() -> Result<(), PlatformError> {
     // Bob receives the commit from Charlie
     let _ = mls_platform_api::mls_receive(
         &state_bob,
-        &gid,
         &bob_id,
         MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;

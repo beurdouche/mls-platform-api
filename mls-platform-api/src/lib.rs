@@ -34,7 +34,7 @@ pub type Credential = Vec<u8>;
 
 #[allow(clippy::large_enum_variant)]
 pub enum MlsMessageOrAck {
-    Ack,
+    Ack(GroupId),
     MlsMessage(MlsMessage),
 }
 
@@ -162,6 +162,16 @@ pub fn mls_generate_signature_keypair(
     Ok(identifier)
 }
 
+// Possibly temporary, allows to add an option to the config without changing every
+// call to client() function
+#[derive(Clone, Debug, Default)]
+pub struct ClientConfig {
+    pub key_package_extensions: Option<ExtensionList>,
+    pub leaf_node_extensions: Option<ExtensionList>,
+    pub leaf_node_capabilities: Option<Capabilities>,
+    pub key_package_lifetime_s: Option<u64>,
+}
+
 ///
 /// Generate a KeyPackage.
 ///
@@ -170,25 +180,14 @@ pub fn mls_generate_key_package(
     myself: Identity,
     credential: Credential,
     // Below is client config
-    key_package_extensions: Option<ExtensionList>,
-    leaf_node_extensions: Option<ExtensionList>,
-    leaf_node_capabilities: Option<Capabilities>,
-    _lifetime: Option<u64>,
+    config: ClientConfig,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
     // Decode the Credential
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
     // Create a client for that state
-    let client = state.client(
-        &myself,
-        Some(decoded_cred),
-        ProtocolVersion::MLS_10,
-        key_package_extensions,
-        leaf_node_extensions,
-        None,
-        leaf_node_capabilities,
-    )?;
+    let client = state.client(&myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
 
     // Generate a KeyPackage from that client_default
     let key_package = client.generate_key_package_message()?;
@@ -263,31 +262,21 @@ pub fn mls_group_create(
     myself: &Identity,
     credential: Credential,
     gid: Option<GroupId>,
+    group_context_extensions: Option<ExtensionList>,
     // Client config
-    _group_context_extensions: Option<ExtensionList>,
-    _leaf_node_extensions: Option<ExtensionList>,
-    _leaf_node_capabilities: Option<Capabilities>,
-    _lifetime: Option<u64>,
+    config: ClientConfig,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
-    let client = pstate.client(
-        myself,
-        Some(decoded_cred),
-        ProtocolVersion::MLS_10,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let client = pstate.client(myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
 
     // Generate a GroupId if none is provided
     let mut group = match gid {
         Some(gid) => {
-            client.create_group_with_id(gid, _group_context_extensions.unwrap_or_default())?
+            client.create_group_with_id(gid, group_context_extensions.unwrap_or_default())?
         }
-        None => client.create_group(_group_context_extensions.unwrap_or_default())?,
+        None => client.create_group(group_context_extensions.unwrap_or_default())?,
     };
 
     // Create the group
@@ -576,23 +565,31 @@ pub fn mls_group_update(
     myself: Identity,
     signature_key: Option<Vec<u8>>,
     credential: Option<Credential>,
-    // Below is client config
-    _group_context_extensions: Option<ExtensionList>,
-    _leaf_node_extensions: Option<ExtensionList>,
-    _leaf_node_capabilities: Option<Capabilities>,
-    _lifetime: Option<u64>,
+    group_context_extensions: Option<ExtensionList>,
+    config: ClientConfig,
 ) -> Result<MlsGroupUpdateJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
+    let decoded_cred = credential
+        .as_ref()
+        .map(|credential| mls_rs::identity::Credential::mls_decode(&mut credential.as_slice()))
+        .transpose()?;
+
     // Propose + Commit
-    let client = pstate.client_default(&myself)?;
+    let client = pstate.client(&myself, decoded_cred, ProtocolVersion::MLS_10, config)?;
     let mut group = client.load_group(&gid)?;
 
     let cipher_suite_provider = crypto_provider
         .cipher_suite_provider(group.cipher_suite())
         .ok_or(PlatformError::UnsupportedCiphersuite)?;
 
-    let (commit, identity) = if let Some((key, cred)) = signature_key.zip(credential) {
+    let mut commit_builder = group.commit_builder();
+
+    if let Some(group_context_extensions) = group_context_extensions {
+        commit_builder = commit_builder.set_group_context_ext(group_context_extensions)?;
+    }
+
+    let identity = if let Some((key, cred)) = signature_key.zip(credential) {
         let signature_secret_key = key.into();
         let signature_public_key = cipher_suite_provider
             .signature_key_derive_public(&signature_secret_key)
@@ -604,17 +601,16 @@ pub fn mls_group_update(
         let identity = cipher_suite_provider
             .hash(&signing_identity.signature_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
-        let commit = group
-            .commit_builder()
-            .set_new_signing_identity(signature_secret_key, signing_identity)
-            .build()?;
 
-        (commit, identity)
+        commit_builder =
+            commit_builder.set_new_signing_identity(signature_secret_key, signing_identity);
+
+        identity
     } else {
-        let commit = group.commit(vec![])?;
-
-        (commit, myself)
+        myself
     };
+
+    let commit = commit_builder.build()?;
 
     group.write_to_storage()?;
 
@@ -727,15 +723,22 @@ pub fn mls_group_close(
 
 pub fn mls_receive(
     pstate: &PlatformState,
-    gid: &GroupId,
     myself: &Identity,
     message_or_ack: MlsMessageOrAck,
 ) -> Result<Vec<u8>, PlatformError> {
-    // TODO: Do we need the GID as input since it is in the message framing ?
+    let gid = match &message_or_ack {
+        MlsMessageOrAck::Ack(gid) => gid,
+        MlsMessageOrAck::MlsMessage(message) => match message.group_id() {
+            Some(gid) => gid,
+            // TODO this could be an error as well
+            None => return Ok(b"Key package or welcome message".to_vec()),
+        },
+    };
+
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let out = match message_or_ack {
-        MlsMessageOrAck::Ack => group.apply_pending_commit().map(ReceivedMessage::Commit),
+        MlsMessageOrAck::Ack(_) => group.apply_pending_commit().map(ReceivedMessage::Commit),
         MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message),
     };
 

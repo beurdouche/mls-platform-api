@@ -25,7 +25,7 @@ use mls_rs_provider_sqlite::{
     SqLiteDataStorageEngine,
 };
 
-use crate::{Identity, PlatformError};
+use crate::{ClientConfig, Identity, PlatformError};
 
 // Dependencies for implementation of TemporaryState
 
@@ -87,10 +87,7 @@ impl PlatformState {
         myself_identifier: &Identity,
         myself_credential: Option<Credential>,
         version: ProtocolVersion,
-        key_package_extensions: Option<ExtensionList>,
-        _leaf_node_extensions: Option<ExtensionList>,
-        _group_context_extensions: Option<ExtensionList>,
-        _capabilities: Option<Capabilities>,
+        config: ClientConfig,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
         let engine = self.get_sqlite_engine()?;
@@ -121,13 +118,21 @@ impl PlatformState {
                 myself_signing_identity,
                 myself_sig_data.secret_key.into(),
                 myself_sig_data.cs.into(),
-            );
+            )
+            .protocol_version(version);
 
-        if let Some(key_package_extensions) = key_package_extensions {
-            builder = builder
-                .key_package_extensions(key_package_extensions)
-                .protocol_version(version);
+        if let Some(key_package_extensions) = config.key_package_extensions {
+            builder = builder.key_package_extensions(key_package_extensions);
         };
+
+        if let Some(leaf_node_extensions) = config.leaf_node_extensions {
+            builder = builder.leaf_node_extensions(leaf_node_extensions);
+        }
+
+        if let Some(key_package_lifetime_s) = config.key_package_lifetime_s {
+            builder = builder.key_package_lifetime(key_package_lifetime_s);
+        }
+
         Ok(builder.build())
     }
 
@@ -139,10 +144,7 @@ impl PlatformState {
             myself_identifier,
             None,
             ProtocolVersion::MLS_10,
-            None,
-            None,
-            None,
-            None,
+            Default::default(),
         )
     }
 
