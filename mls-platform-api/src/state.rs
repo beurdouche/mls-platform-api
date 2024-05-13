@@ -11,11 +11,15 @@ use mls_rs::{
     client_builder::MlsConfig,
     crypto::{SignaturePublicKey, SignatureSecretKey},
     error::IntoAnyError,
-    group::Capabilities,
     identity::{Credential, SigningIdentity},
     storage_provider::KeyPackageData,
-    CipherSuite, Client, ExtensionList, ProtocolVersion,
+    CipherSuite, Client, ProtocolVersion,
 };
+
+// use mls_rs::{
+//     group::Capabilities,
+//     ExtensionList,
+// };
 
 use mls_rs_provider_sqlite::{
     connection_strategy::{
