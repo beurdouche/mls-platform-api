@@ -3,4 +3,3 @@ resolver = "2"
 members = [
   "mls-platform-api",
 ]
-license = "Apache-2.0 OR MIT"
