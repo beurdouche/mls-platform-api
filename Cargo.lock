@@ -674,7 +674,7 @@ dependencies = [
 [[package]]
 name = "mls-rs"
 version = "0.39.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -698,8 +698,8 @@ dependencies = [
 
 [[package]]
 name = "mls-rs-codec"
-version = "0.5.2"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+version = "0.5.3"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "mls-rs-codec-derive",
  "thiserror",
@@ -709,7 +709,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec-derive"
 version = "0.1.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -720,7 +720,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-core"
 version = "0.18.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "hex",
@@ -736,7 +736,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-hpke"
 version = "0.9.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -750,7 +750,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-nss"
 version = "0.1.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -770,7 +770,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-traits"
 version = "0.10.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -780,7 +780,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-identity-x509"
 version = "0.11.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -792,7 +792,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-provider-sqlite"
 version = "0.11.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=53b0baaf58611852ad7f967cfd51f590c61e438d#53b0baaf58611852ad7f967cfd51f590c61e438d"
+source = "git+https://github.com/beurdouche/mls-rs?rev=8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8#8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"
 dependencies = [
  "async-trait",
  "hex",
@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "nss-gk-api"
 version = "0.4.0"
-source = "git+https://github.com/beurdouche/nss-gk-api?rev=5d2e4078eae67c5eeff70e9db208e8f7ca2ef1cf#5d2e4078eae67c5eeff70e9db208e8f7ca2ef1cf"
+source = "git+https://github.com/beurdouche/nss-gk-api?rev=d4bc7687f2d4a923c83beeaeefbeacd6f0d12040#d4bc7687f2d4a923c83beeaeefbeacd6f0d12040"
 dependencies = [
  "bindgen",
  "log",
