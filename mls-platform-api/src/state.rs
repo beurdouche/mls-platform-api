@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
-    convert::Infallible,
+    collections::HashMap,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -14,9 +13,8 @@ use mls_rs::{
     error::IntoAnyError,
     group::Capabilities,
     identity::{Credential, SigningIdentity},
-    mls_rs_codec::{MlsDecode, MlsEncode},
-    storage_provider::{EpochRecord, GroupState, KeyPackageData},
-    CipherSuite, Client, ExtensionList, GroupStateStorage, KeyPackageStorage, ProtocolVersion,
+    storage_provider::KeyPackageData,
+    CipherSuite, Client, ExtensionList, ProtocolVersion,
 };
 
 use mls_rs_provider_sqlite::{
@@ -27,7 +25,15 @@ use mls_rs_provider_sqlite::{
     SqLiteDataStorageEngine,
 };
 
-use crate::{GroupConfig, Identity, PlatformError};
+use crate::{ClientConfig, Identity, PlatformError};
+
+// Dependencies for implementation of TemporaryState
+
+// use crate::GroupConfig;
+// use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
+// use mls_rs::{GroupStateStorage, KeyPackageStorage};
+// use mls_rs_core::group::{EpochRecord, GroupState};
+// use std::{collections::hash_map::Entry, convert::Infallible};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GroupData {
@@ -81,12 +87,9 @@ impl PlatformState {
         myself_identifier: &Identity,
         myself_credential: Option<Credential>,
         version: ProtocolVersion,
-        key_package_extensions: Option<ExtensionList>,
-        _leaf_node_extensions: Option<ExtensionList>,
-        _group_context_extensions: Option<ExtensionList>,
-        _capabilities: Option<Capabilities>,
+        config: ClientConfig,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
+        let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
         let engine = self.get_sqlite_engine()?;
 
         let mut myself_sig_data = self
@@ -115,13 +118,21 @@ impl PlatformState {
                 myself_signing_identity,
                 myself_sig_data.secret_key.into(),
                 myself_sig_data.cs.into(),
-            );
+            )
+            .protocol_version(version);
 
-        if let Some(key_package_extensions) = key_package_extensions {
-            builder = builder
-                .key_package_extensions(key_package_extensions)
-                .protocol_version(version);
+        if let Some(key_package_extensions) = config.key_package_extensions {
+            builder = builder.key_package_extensions(key_package_extensions);
         };
+
+        if let Some(leaf_node_extensions) = config.leaf_node_extensions {
+            builder = builder.leaf_node_extensions(leaf_node_extensions);
+        }
+
+        if let Some(key_package_lifetime_s) = config.key_package_lifetime_s {
+            builder = builder.key_package_lifetime(key_package_lifetime_s);
+        }
+
         Ok(builder.build())
     }
 
@@ -133,10 +144,7 @@ impl PlatformState {
             myself_identifier,
             None,
             ProtocolVersion::MLS_10,
-            None,
-            None,
-            None,
-            None,
+            Default::default(),
         )
     }
 
@@ -221,173 +229,173 @@ impl PlatformState {
     }
 }
 
-impl TemporaryState {
-    pub fn new() -> Self {
-        Default::default()
-    }
+// impl TemporaryState {
+//     pub fn new() -> Self {
+//         Default::default()
+//     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, PlatformError> {
-        bincode::serialize(self).map_err(Into::into)
-    }
+//     pub fn to_bytes(&self) -> Result<Vec<u8>, PlatformError> {
+//         bincode::serialize(self).map_err(Into::into)
+//     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PlatformError> {
-        bincode::deserialize(bytes).map_err(Into::into)
-    }
+//     pub fn from_bytes(bytes: &[u8]) -> Result<Self, PlatformError> {
+//         bincode::deserialize(bytes).map_err(Into::into)
+//     }
 
-    pub fn client(
-        &self,
-        myself: SigningIdentity,
-        group_config: Option<GroupConfig>,
-    ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_rustcrypto::RustCryptoProvider::default();
-        let myself_sigkey = self.get_sigkey(&myself)?;
+//     pub fn client(
+//         &self,
+//         myself: SigningIdentity,
+//         group_config: Option<GroupConfig>,
+//     ) -> Result<Client<impl MlsConfig>, PlatformError> {
+//         let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
+//         let myself_sigkey = self.get_sigkey(&myself)?;
 
-        let mut builder = mls_rs::client_builder::ClientBuilder::new()
-            .key_package_repo(self.clone())
-            .group_state_storage(self.clone())
-            .crypto_provider(crypto_provider)
-            .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
-            .signing_identity(
-                myself,
-                myself_sigkey.secret_key.into(),
-                myself_sigkey.cs.into(),
-            );
+//         let mut builder = mls_rs::client_builder::ClientBuilder::new()
+//             .key_package_repo(self.clone())
+//             .group_state_storage(self.clone())
+//             .crypto_provider(crypto_provider)
+//             .identity_provider(mls_rs::identity::basic::BasicIdentityProvider)
+//             .signing_identity(
+//                 myself,
+//                 myself_sigkey.secret_key.into(),
+//                 myself_sigkey.cs.into(),
+//             );
 
-        if let Some(config) = group_config {
-            builder = builder
-                .key_package_extensions(config.options)
-                .protocol_version(config.version);
-        }
+//         if let Some(config) = group_config {
+//             builder = builder
+//                 .key_package_extensions(config.options)
+//                 .protocol_version(config.version);
+//         }
 
-        Ok(builder.build())
-    }
+//         Ok(builder.build())
+//     }
 
-    pub fn insert_sigkey(
-        &mut self,
-        myself_sigkey: &SignatureSecretKey,
-        myself_pubkey: &SignaturePublicKey,
-        cs: CipherSuite,
-        identifier: Identity,
-    ) -> Result<(), PlatformError> {
-        let signature_data = SignatureData {
-            public_key: myself_pubkey.to_vec(),
-            cs: *cs,
-            secret_key: myself_sigkey.to_vec(),
-            credential: None,
-        };
+//     pub fn insert_sigkey(
+//         &mut self,
+//         myself_sigkey: &SignatureSecretKey,
+//         myself_pubkey: &SignaturePublicKey,
+//         cs: CipherSuite,
+//         identifier: Identity,
+//     ) -> Result<(), PlatformError> {
+//         let signature_data = SignatureData {
+//             public_key: myself_pubkey.to_vec(),
+//             cs: *cs,
+//             secret_key: myself_sigkey.to_vec(),
+//             credential: None,
+//         };
 
-        self.sigkeys.insert(identifier, signature_data);
-        // TODO: We could return the value to indicate if the key
-        // existed (see the definition of insert).
-        Ok(())
-    }
+//         self.sigkeys.insert(identifier, signature_data);
+//         // TODO: We could return the value to indicate if the key
+//         // existed (see the definition of insert).
+//         Ok(())
+//     }
 
-    pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<SignatureData, PlatformError> {
-        let key = myself.mls_encode_to_vec()?;
+//     pub fn get_sigkey(&self, myself: &SigningIdentity) -> Result<SignatureData, PlatformError> {
+//         let key = myself.mls_encode_to_vec()?;
 
-        self.sigkeys
-            .get(&key)
-            .cloned()
-            .ok_or(PlatformError::UnavailableSecret)
-    }
-}
+//         self.sigkeys
+//             .get(&key)
+//             .cloned()
+//             .ok_or(PlatformError::UnavailableSecret)
+//     }
+// }
 
-impl GroupStateStorage for TemporaryState {
-    type Error = mls_rs::mls_rs_codec::Error;
+// impl GroupStateStorage for TemporaryState {
+//     type Error = mls_rs::mls_rs_codec::Error;
 
-    fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
-        let group_locked = self.groups.lock().unwrap();
+//     fn max_epoch_id(&self, group_id: &[u8]) -> Result<Option<u64>, Self::Error> {
+//         let group_locked = self.groups.lock().unwrap();
 
-        Ok(group_locked
-            .get(group_id)
-            .and_then(|group_data| group_data.epoch_data.keys().max().copied()))
-    }
+//         Ok(group_locked
+//             .get(group_id)
+//             .and_then(|group_data| group_data.epoch_data.keys().max().copied()))
+//     }
 
-    fn state<T>(&self, group_id: &[u8]) -> Result<Option<T>, Self::Error>
-    where
-        T: GroupState + MlsDecode,
-    {
-        self.groups
-            .lock()
-            .unwrap()
-            .get(group_id)
-            .map(|v| T::mls_decode(&mut v.state_data.as_slice()))
-            .transpose()
-            .map_err(Into::into)
-    }
+//     fn state<T>(&self, group_id: &[u8]) -> Result<Option<T>, Self::Error>
+//     where
+//         T: GroupState + MlsDecode,
+//     {
+//         self.groups
+//             .lock()
+//             .unwrap()
+//             .get(group_id)
+//             .map(|v| T::mls_decode(&mut v.state_data.as_slice()))
+//             .transpose()
+//             .map_err(Into::into)
+//     }
 
-    fn epoch<T>(&self, group_id: &[u8], epoch_id: u64) -> Result<Option<T>, Self::Error>
-    where
-        T: EpochRecord + MlsEncode + MlsDecode,
-    {
-        self.groups
-            .lock()
-            .unwrap()
-            .get(group_id)
-            .and_then(|group_data| group_data.epoch_data.get(&epoch_id))
-            .map(|v| T::mls_decode(&mut &v[..]))
-            .transpose()
-            .map_err(Into::into)
-    }
+//     fn epoch<T>(&self, group_id: &[u8], epoch_id: u64) -> Result<Option<T>, Self::Error>
+//     where
+//         T: EpochRecord + MlsEncode + MlsDecode,
+//     {
+//         self.groups
+//             .lock()
+//             .unwrap()
+//             .get(group_id)
+//             .and_then(|group_data| group_data.epoch_data.get(&epoch_id))
+//             .map(|v| T::mls_decode(&mut &v[..]))
+//             .transpose()
+//             .map_err(Into::into)
+//     }
 
-    fn write<ST, ET>(
-        &mut self,
-        state: ST,
-        epoch_inserts: Vec<ET>,
-        epoch_updates: Vec<ET>,
-    ) -> Result<(), Self::Error>
-    where
-        ST: GroupState + MlsEncode + MlsDecode + Send + Sync,
-        ET: EpochRecord + MlsEncode + MlsDecode + Send + Sync,
-    {
-        let state_data = state.mls_encode_to_vec()?;
-        let mut states = self.groups.lock().unwrap();
+//     fn write<ST, ET>(
+//         &mut self,
+//         state: ST,
+//         epoch_inserts: Vec<ET>,
+//         epoch_updates: Vec<ET>,
+//     ) -> Result<(), Self::Error>
+//     where
+//         ST: GroupState + MlsEncode + MlsDecode + Send + Sync,
+//         ET: EpochRecord + MlsEncode + MlsDecode + Send + Sync,
+//     {
+//         let state_data = state.mls_encode_to_vec()?;
+//         let mut states = self.groups.lock().unwrap();
 
-        let group_data = match states.entry(state.id()) {
-            Entry::Occupied(entry) => {
-                let data = entry.into_mut();
-                data.state_data = state_data;
-                data
-            }
-            Entry::Vacant(entry) => entry.insert(GroupData {
-                state_data,
-                epoch_data: Default::default(),
-            }),
-        };
+//         let group_data = match states.entry(state.id()) {
+//             Entry::Occupied(entry) => {
+//                 let data = entry.into_mut();
+//                 data.state_data = state_data;
+//                 data
+//             }
+//             Entry::Vacant(entry) => entry.insert(GroupData {
+//                 state_data,
+//                 epoch_data: Default::default(),
+//             }),
+//         };
 
-        epoch_inserts.into_iter().try_for_each(|e| {
-            group_data.epoch_data.insert(e.id(), e.mls_encode_to_vec()?);
-            Ok::<_, Self::Error>(())
-        })?;
+//         epoch_inserts.into_iter().try_for_each(|e| {
+//             group_data.epoch_data.insert(e.id(), e.mls_encode_to_vec()?);
+//             Ok::<_, Self::Error>(())
+//         })?;
 
-        epoch_updates.into_iter().try_for_each(|e| {
-            if let Some(data) = group_data.epoch_data.get_mut(&e.id()) {
-                *data = e.mls_encode_to_vec()?;
-            };
+//         epoch_updates.into_iter().try_for_each(|e| {
+//             if let Some(data) = group_data.epoch_data.get_mut(&e.id()) {
+//                 *data = e.mls_encode_to_vec()?;
+//             };
 
-            Ok::<_, Self::Error>(())
-        })?;
+//             Ok::<_, Self::Error>(())
+//         })?;
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
-impl KeyPackageStorage for TemporaryState {
-    type Error = Infallible;
+// impl KeyPackageStorage for TemporaryState {
+//     type Error = Infallible;
 
-    fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
-        let mut states = self.key_packages.lock().unwrap();
-        states.insert(id, pkg);
-        Ok(())
-    }
+//     fn insert(&mut self, id: Vec<u8>, pkg: KeyPackageData) -> Result<(), Self::Error> {
+//         let mut states = self.key_packages.lock().unwrap();
+//         states.insert(id, pkg);
+//         Ok(())
+//     }
 
-    fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
-        Ok(self.key_packages.lock().unwrap().get(id).cloned())
-    }
+//     fn get(&self, id: &[u8]) -> Result<Option<KeyPackageData>, Self::Error> {
+//         Ok(self.key_packages.lock().unwrap().get(id).cloned())
+//     }
 
-    fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
-        let mut states = self.key_packages.lock().unwrap();
-        states.remove(id);
-        Ok(())
-    }
-}
+//     fn delete(&mut self, id: &[u8]) -> Result<(), Self::Error> {
+//         let mut states = self.key_packages.lock().unwrap();
+//         states.remove(id);
+//         Ok(())
+//     }
+// }

@@ -2,13 +2,16 @@
 name = "mls-platform-api"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0 OR MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+gecko = ["mls-rs-crypto-nss/gecko"]
 
 [dependencies]
-mls-rs =  {git = "https://github.com/awslabs/mls-rs", rev = "de125ef942564d3b4029eb0e4c3ab16656b1955d", features = ["sqlcipher-bundled", "serde"] }
-mls-rs-crypto-rustcrypto = {git = "https://github.com/awslabs/mls-rs", rev = "de125ef942564d3b4029eb0e4c3ab16656b1955d"}
-mls-rs-provider-sqlite = {git = "https://github.com/awslabs/mls-rs", rev = "de125ef942564d3b4029eb0e4c3ab16656b1955d"}
+mls-rs =  {git = "https://github.com/beurdouche/mls-rs", rev = "8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8", features = ["sqlcipher-bundled", "serde"] }
+# mls-rs-core =  {git = "https://github.com/beurdouche/mls-rs", rev = "8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"}
+mls-rs-crypto-nss = {git = "https://github.com/beurdouche/mls-rs", rev = "8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"}
+mls-rs-provider-sqlite = {git = "https://github.com/beurdouche/mls-rs", rev = "8efc35d3c4e4c9c6694362f269abb8d9c5e6eac8"}
 hex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["alloc", "derive", "rc"] }
 bincode = "1.3"
