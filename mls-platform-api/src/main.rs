@@ -89,7 +89,12 @@ fn main() -> Result<(), PlatformError> {
         .expect("No welcome messages found")
         .clone();
 
-    mls_platform_api::mls_receive(&state_alice, &alice_id, MlsMessageOrAck::Ack(gid.to_vec()))?;
+    // Alice process her own commit
+    mls_platform_api::mls_receive(
+        &state_alice,
+        &alice_id,
+        MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+    )?;
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_alice, &gid, &alice_id)?;
@@ -129,7 +134,12 @@ fn main() -> Result<(), PlatformError> {
         .expect("No welcome messages found")
         .clone();
 
-    mls_platform_api::mls_receive(&state_bob, &bob_id, MlsMessageOrAck::Ack(gid.to_vec()))?;
+    // Bobs process its commit
+    mls_platform_api::mls_receive(
+        &state_bob,
+        &bob_id,
+        MlsMessageOrAck::MlsMessage(commit_2.clone()),
+    )?;
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_bob, &gid, &bob_id)?;
