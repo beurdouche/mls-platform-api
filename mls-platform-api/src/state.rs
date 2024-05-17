@@ -16,10 +16,7 @@ use mls_rs::{
     CipherSuite, Client, ProtocolVersion,
 };
 
-// use mls_rs::{
-//     group::Capabilities,
-//     ExtensionList,
-// };
+use crate::ClientConfig;
 
 use mls_rs_provider_sqlite::{
     connection_strategy::{
@@ -29,7 +26,7 @@ use mls_rs_provider_sqlite::{
     SqLiteDataStorageEngine,
 };
 
-use crate::{ClientConfig, Identity, PlatformError};
+use crate::{Identity, PlatformError};
 
 // Dependencies for implementation of TemporaryState
 

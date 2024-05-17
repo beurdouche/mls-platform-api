@@ -92,8 +92,18 @@ pub fn state_delete(name: String) -> Result<(), PlatformError> {
 ///
 
 ///
-/// Group Configuration
+/// Configurations
 ///
+
+// Possibly temporary, allows to add an option to the config without changing every
+// call to client() function
+#[derive(Clone, Debug, Default)]
+pub struct ClientConfig {
+    pub key_package_extensions: Option<ExtensionList>,
+    pub leaf_node_extensions: Option<ExtensionList>,
+    pub leaf_node_capabilities: Option<Capabilities>,
+    pub key_package_lifetime_s: Option<u64>,
+}
 
 // Assuming GroupConfig is a struct
 #[derive(Debug, Clone)]
@@ -162,16 +172,6 @@ pub fn mls_generate_signature_keypair(
     Ok(identifier)
 }
 
-// Possibly temporary, allows to add an option to the config without changing every
-// call to client() function
-#[derive(Clone, Debug, Default)]
-pub struct ClientConfig {
-    pub key_package_extensions: Option<ExtensionList>,
-    pub leaf_node_extensions: Option<ExtensionList>,
-    pub leaf_node_capabilities: Option<Capabilities>,
-    pub key_package_lifetime_s: Option<u64>,
-}
-
 ///
 /// Generate a KeyPackage.
 ///
@@ -179,7 +179,6 @@ pub fn mls_generate_key_package(
     state: &PlatformState,
     myself: Identity,
     credential: Credential,
-    // Below is client config
     config: ClientConfig,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
@@ -263,7 +262,6 @@ pub fn mls_group_create(
     credential: Credential,
     gid: Option<GroupId>,
     group_context_extensions: Option<ExtensionList>,
-    // Client config
     config: ClientConfig,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
@@ -278,10 +276,6 @@ pub fn mls_group_create(
         }
         None => client.create_group(group_context_extensions.unwrap_or_default())?,
     };
-
-    // Create the group
-    // group.commit(Vec::new())?;
-    // group.apply_pending_commit()?;
 
     // The state needs to be returned or stored somewhere
     group.write_to_storage()?;
@@ -570,12 +564,12 @@ pub fn mls_group_update(
 ) -> Result<MlsGroupUpdateJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
+    // Propose + Commit
     let decoded_cred = credential
         .as_ref()
         .map(|credential| mls_rs::identity::Credential::mls_decode(&mut credential.as_slice()))
         .transpose()?;
 
-    // Propose + Commit
     let client = pstate.client(&myself, decoded_cred, ProtocolVersion::MLS_10, config)?;
     let mut group = client.load_group(&gid)?;
 
@@ -596,14 +590,10 @@ pub fn mls_group_update(
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
         let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut cred.as_slice())?;
-
         let signing_identity = SigningIdentity::new(decoded_cred, signature_public_key);
         let identity = cipher_suite_provider
             .hash(&signing_identity.signature_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
-
-        commit_builder =
-            commit_builder.set_new_signing_identity(signature_secret_key, signing_identity);
 
         identity
     } else {
@@ -726,6 +716,7 @@ pub fn mls_receive(
     myself: &Identity,
     message_or_ack: MlsMessageOrAck,
 ) -> Result<Vec<u8>, PlatformError> {
+    // Extract the gid from the Message
     let gid = match &message_or_ack {
         MlsMessageOrAck::Ack(gid) => gid,
         MlsMessageOrAck::MlsMessage(message) => match message.group_id() {

@@ -129,7 +129,7 @@ fn main() -> Result<(), PlatformError> {
         .expect("No welcome messages found")
         .clone();
 
-    mls_platform_api::mls_receive(&state_bob, &bob_id, MlsMessageOrAck::Ack(bob_id.to_vec()))?;
+    mls_platform_api::mls_receive(&state_bob, &bob_id, MlsMessageOrAck::Ack(gid.to_vec()))?;
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_bob, &gid, &bob_id)?;
