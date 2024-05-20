@@ -91,7 +91,10 @@ impl PlatformState {
         config: ClientConfig,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
-        let engine = self.get_sqlite_engine()?;
+
+        let engine = self
+            .get_sqlite_engine()?
+            .with_context(myself_identifier.to_vec());
 
         let mut myself_sig_data = self
             .get_sig_data(myself_identifier)?
