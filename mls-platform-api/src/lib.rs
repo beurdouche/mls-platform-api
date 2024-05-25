@@ -103,6 +103,7 @@ pub struct ClientConfig {
     pub leaf_node_extensions: Option<ExtensionList>,
     pub leaf_node_capabilities: Option<Capabilities>,
     pub key_package_lifetime_s: Option<u64>,
+    pub allow_external_commits: bool,
 }
 
 // Assuming GroupConfig is a struct
@@ -451,12 +452,22 @@ pub fn mls_group_add(
 }
 
 pub fn mls_group_propose_add(
-    _pstate: &mut PlatformState,
-    _gid: &GroupId,
-    _myself: Identity,
-    _new_members: Vec<MlsMessage>,
+    pstate: &mut PlatformState,
+    gid: &GroupId,
+    myself: Identity,
+    new_members: Vec<MlsMessage>,
 ) -> Result<Vec<MlsMessage>, PlatformError> {
-    unimplemented!()
+    let client = pstate.client_default(&myself)?;
+    let mut group = client.load_group(gid)?;
+
+    let proposals = new_members
+        .into_iter()
+        .map(|member| group.propose_add(member, vec![]))
+        .collect::<Result<_, _>>()?;
+
+    group.write_to_storage()?;
+
+    Ok(proposals)
 }
 
 ///
@@ -546,8 +557,8 @@ pub fn mls_group_propose_remove(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsGroupUpdate {
-    identity: Identity,
-    commit_output: MlsCommitOutput,
+    pub identity: Identity,
+    pub commit_output: MlsCommitOutput,
 }
 
 pub type MlsGroupUpdateJsonBytes = Vec<u8>;
@@ -836,6 +847,132 @@ pub fn mls_export(
     // Encode the value as Json Bytes
     let json_string = serde_json::to_string(&epoch_and_exporter)
         .map_err(|_| PlatformError::JsonConversionError)?;
+    let json_bytes = json_string.as_bytes().to_vec();
+
+    Ok(json_bytes)
+}
+
+///
+/// Join a group using the external commit mechanism
+///
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MlsExternalCommitOutput {
+    pub gid: GroupId,
+    pub external_commit: MlsMessage,
+}
+
+impl Serialize for MlsExternalCommitOutput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MlsExternalCommitOutput", 2)?;
+        state.serialize_field("gid", &self.gid)?;
+
+        // Handle serialization for `commit`
+        let external_commit_bytes = self
+            .external_commit
+            .mls_encode_to_vec()
+            .map_err(serde::ser::Error::custom)?;
+
+        state.serialize_field("external_commit", &external_commit_bytes)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for MlsExternalCommitOutput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MlsExternalCommitOutputVisitor;
+
+        impl<'de> Visitor<'de> for MlsExternalCommitOutputVisitor {
+            type Value = MlsExternalCommitOutput;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct MlsExternalCommitOutput")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<MlsExternalCommitOutput, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut gid = None;
+                let mut external_commit = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "external_commit" => {
+                            let value: Vec<u8> = map.next_value()?;
+                            external_commit = Some(
+                                MlsMessage::mls_decode(&mut &value[..])
+                                    .map_err(de::Error::custom)?,
+                            );
+                        }
+                        "gid" => gid = Some(map.next_value()?),
+                        _ => { /* Ignore unknown fields */ }
+                    }
+                }
+
+                Ok(MlsExternalCommitOutput {
+                    gid: gid.ok_or_else(|| de::Error::missing_field("gid"))?,
+                    external_commit: external_commit
+                        .ok_or_else(|| de::Error::missing_field("external_commit"))?,
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &["gid", "external_commit"];
+        deserializer.deserialize_struct(
+            "MlsExternalCommitOutput",
+            FIELDS,
+            MlsExternalCommitOutputVisitor,
+        )
+    }
+}
+
+pub type MlsExternalCommitOutputJsonBytes = Vec<u8>;
+
+pub fn mls_group_external_commit(
+    pstate: &PlatformState,
+    myself: Identity,
+    credential: Credential,
+    group_info: MlsMessage,
+    ratchet_tree: Option<ExportedTree<'static>>,
+) -> Result<MlsExternalCommitOutputJsonBytes, PlatformError> {
+    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
+
+    let client = pstate.client(
+        &myself,
+        Some(decoded_cred),
+        ProtocolVersion::MLS_10,
+        ClientConfig::default(),
+    )?;
+
+    let mut commit_builder = client.external_commit_builder()?;
+
+    if let Some(ratchet_tree) = ratchet_tree {
+        commit_builder = commit_builder.with_tree_data(ratchet_tree);
+    }
+
+    let (mut group, external_commit) = commit_builder.build(group_info)?;
+    let gid = group.group_id().to_vec();
+
+    // Store the state
+    group.write_to_storage()?;
+
+    // Encode the output
+    let gid_and_message = MlsExternalCommitOutput {
+        gid,
+        external_commit,
+    };
+
+    let json_string =
+        serde_json::to_string(&gid_and_message).map_err(|_| PlatformError::JsonConversionError)?;
+
     let json_bytes = json_string.as_bytes().to_vec();
 
     Ok(json_bytes)

@@ -1,6 +1,7 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
+use mls_platform_api::ClientConfig;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
@@ -214,6 +215,71 @@ fn main() -> Result<(), PlatformError> {
     )?;
     let exporter_str = mls_platform_api::utils_json_bytes_to_string_custom(&exporter)?;
     println!("Exporter: {exporter_str:?}");
+
+    // Diana joins externally
+    let diana_id = mls_platform_api::mls_generate_signature_keypair(
+        &mut state_global,
+        group_config.ciphersuite,
+    )?;
+
+    let diana_cred = mls_platform_api::mls_generate_credential_basic("diana")?;
+
+    dbg!("Diana identifier", hex::encode(&diana_id));
+
+    let mut client_config = ClientConfig::default();
+    client_config.allow_external_commits = true;
+
+    // Bob produces group info
+    let commit_4_output = mls_platform_api::mls_group_update(
+        &mut state_global,
+        gid.clone(),
+        bob_id.clone(),
+        None,
+        None,
+        None,
+        client_config,
+    )?;
+
+    let commit_4_output: mls_platform_api::MlsGroupUpdate = from_slice(&commit_4_output).unwrap();
+
+    // Bob receives own commit
+    mls_platform_api::mls_receive(
+        &state_global,
+        &bob_id,
+        MlsMessageOrAck::MlsMessage(commit_4_output.commit_output.commit),
+    )?;
+
+    // Diana joins and sends a message
+    let external_commit_output_bytes = mls_platform_api::mls_group_external_commit(
+        &state_global,
+        diana_id.clone(),
+        diana_cred,
+        commit_4_output
+            .commit_output
+            .group_info
+            .expect("alice should produce group info"),
+        // use tree in extension for now
+        None,
+    )?;
+
+    let external_commit_output: mls_platform_api::MlsExternalCommitOutput =
+        serde_json::from_slice(&external_commit_output_bytes).unwrap();
+
+    println!("externally joined group {:?}", &external_commit_output.gid);
+
+    let ctx = mls_platform_api::mls_send(&state_global, &gid, &diana_id, b"hello from diana")?;
+
+    // Bob receives Diana's commit and message
+    mls_platform_api::mls_receive(
+        &state_global,
+        &bob_id,
+        MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
+    )?;
+
+    let ptx =
+        mls_platform_api::mls_receive(&state_global, &bob_id, MlsMessageOrAck::MlsMessage(ctx))?;
+
+    println!("bob received message {:?}", String::from_utf8(ptx).unwrap());
 
     Ok(())
 }

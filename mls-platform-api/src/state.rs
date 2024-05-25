@@ -12,6 +12,7 @@ use mls_rs::{
     crypto::{SignaturePublicKey, SignatureSecretKey},
     error::IntoAnyError,
     identity::{Credential, SigningIdentity},
+    mls_rules::{CommitOptions, DefaultMlsRules},
     storage_provider::KeyPackageData,
     CipherSuite, Client, ProtocolVersion,
 };
@@ -136,6 +137,12 @@ impl PlatformState {
         if let Some(key_package_lifetime_s) = config.key_package_lifetime_s {
             builder = builder.key_package_lifetime(key_package_lifetime_s);
         }
+
+        let mls_rules = DefaultMlsRules::new().with_commit_options(
+            CommitOptions::default().with_allow_external_commit(config.allow_external_commits),
+        );
+
+        builder = builder.mls_rules(mls_rules);
 
         Ok(builder.build())
     }
