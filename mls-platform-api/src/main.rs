@@ -80,7 +80,7 @@ fn main() -> Result<(), PlatformError> {
     println!("\nGroup created by Alice: {}", hex::encode(&gid));
 
     // List the members of the group
-    let members = mls_platform_api::mls_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, before adding bob): {members_str:?}");
 
@@ -107,7 +107,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, after adding bob): {members_str:?}");
 
@@ -116,7 +116,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_confirm_join(&state_global, &bob_id, welcome.clone(), None)?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after joining the group): {members_str:?}");
 
@@ -159,7 +159,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_members(&state_global, &gid, &bob_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after adding charlie): {members_str:?}");
 
@@ -176,7 +176,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_confirm_join(&state_global, &charlie_id, welcome_2.clone(), None)?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_members(&state_global, &gid, &charlie_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (charlie, after joining the group): {members_str:?}");
 
@@ -196,7 +196,7 @@ fn main() -> Result<(), PlatformError> {
         MlsMessageOrAck::Ack(gid.to_vec()),
     )?;
 
-    let members = mls_platform_api::mls_members(&state_global, &gid, &charlie_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (charlie, after removing alice): {members_str:?}");
 
@@ -208,7 +208,7 @@ fn main() -> Result<(), PlatformError> {
         MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
 
-    let members = mls_platform_api::mls_members(&state_global, &gid, &bob_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, after receiving alice's removal the group): {members_str:?}");
     // TODO: Alice should probably delete the group from the state before this point
@@ -221,7 +221,7 @@ fn main() -> Result<(), PlatformError> {
         MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
 
-    let members = mls_platform_api::mls_members(&state_global, &gid, &bob_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after receiving alice's removal the group): {members_str:?}");
 
@@ -282,7 +282,7 @@ fn main() -> Result<(), PlatformError> {
 
     println!("Externally joined group {:?}", &external_commit_output.gid);
 
-    let members = mls_platform_api::mls_members(&state_global, &gid, &diana_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (diane, after joining): {members_str:?}");
 
@@ -298,7 +298,7 @@ fn main() -> Result<(), PlatformError> {
         MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
     )?;
 
-    let members = mls_platform_api::mls_members(&state_global, &gid, &diana_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after diane joined externally): {members_str:?}");
 

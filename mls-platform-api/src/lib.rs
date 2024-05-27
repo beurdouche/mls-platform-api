@@ -88,10 +88,6 @@ pub fn state_delete(name: String) -> Result<(), PlatformError> {
 }
 
 ///
-/// TODO: List groups
-///
-
-///
 /// Configurations
 ///
 
@@ -197,22 +193,22 @@ pub fn mls_generate_key_package(
 ///
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MlsMembers {
+pub struct MlsGroupMembers {
     group_id: GroupId,
     epoch: u64,
     identities: Vec<(Identity, Credential)>,
     // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
-pub type MlsMembersJsonBytes = Vec<u8>;
+pub type MlsGroupMembersJsonBytes = Vec<u8>;
 
 // Note: The identity is needed because it is allowed to have multiple
 //       identities in a group.
-pub fn mls_members(
+pub fn mls_group_members(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<MlsMembersJsonBytes, PlatformError> {
+) -> Result<MlsGroupMembersJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     let group = state.client_default(myself)?.load_group(gid)?;
@@ -236,7 +232,7 @@ pub fn mls_members(
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
-    let members = MlsMembers {
+    let members = MlsGroupMembers {
         group_id: gid.to_vec(),
         epoch,
         identities,
