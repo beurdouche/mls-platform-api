@@ -674,7 +674,7 @@ dependencies = [
 [[package]]
 name = "mls-rs"
 version = "0.39.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -699,7 +699,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec"
 version = "0.5.3"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "mls-rs-codec-derive",
  "thiserror",
@@ -709,7 +709,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec-derive"
 version = "0.1.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -720,7 +720,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-core"
 version = "0.18.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "hex",
@@ -736,7 +736,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-hpke"
 version = "0.9.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -750,7 +750,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-nss"
 version = "0.1.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -770,7 +770,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-traits"
 version = "0.10.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -780,7 +780,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-identity-x509"
 version = "0.11.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -792,7 +792,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-provider-sqlite"
 version = "0.11.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83#b3e76939ecdc19cbc7872ea57d6aa24ed4e00c83"
+source = "git+https://github.com/beurdouche/mls-rs?rev=dcb449a933d428da07276677992cae7c19fd5751#dcb449a933d428da07276677992cae7c19fd5751"
 dependencies = [
  "async-trait",
  "hex",
