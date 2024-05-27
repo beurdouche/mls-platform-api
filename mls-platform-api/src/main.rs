@@ -18,10 +18,12 @@ fn main() -> Result<(), PlatformError> {
     let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
     let bob_cred = mls_platform_api::mls_generate_credential_basic("bob")?;
     let charlie_cred = mls_platform_api::mls_generate_credential_basic("charlie")?;
+    let diana_cred = mls_platform_api::mls_generate_credential_basic("diana")?;
 
-    dbg!("Alice credential", hex::encode(&alice_cred));
-    dbg!("Bob credential", hex::encode(&bob_cred));
-    dbg!("Charlie credential", hex::encode(&charlie_cred));
+    println!("\nAlice credential: {}", hex::encode(&alice_cred));
+    println!("Bob credential: {}", hex::encode(&bob_cred));
+    println!("Charlie credential: {}", hex::encode(&charlie_cred));
+    println!("Diana credential: {}", hex::encode(&diana_cred));
 
     // Create signature keypairs and store them in the state
     let alice_id = mls_platform_api::mls_generate_signature_keypair(
@@ -39,9 +41,15 @@ fn main() -> Result<(), PlatformError> {
         group_config.ciphersuite,
     )?;
 
-    dbg!("Alice identifier", hex::encode(&alice_id));
-    dbg!("Bob identifier", hex::encode(&bob_id));
-    dbg!("Charlie identifier", hex::encode(&charlie_id));
+    let diana_id = mls_platform_api::mls_generate_signature_keypair(
+        &mut state_global,
+        group_config.ciphersuite,
+    )?;
+
+    println!("\nAlice identifier: {}", hex::encode(&alice_id));
+    println!("Bob identifier: {}", hex::encode(&bob_id));
+    println!("Charlie identifier: {}", hex::encode(&charlie_id));
+    println!("Diana identifier: {}", hex::encode(&diana_id));
 
     // Create Key Package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(
@@ -58,7 +66,6 @@ fn main() -> Result<(), PlatformError> {
         charlie_cred,
         Default::default(),
     )?;
-    dbg!(format!("{charlie_kp:?}"));
 
     // Create a group with Alice
     let gid = mls_platform_api::mls_group_create(
@@ -70,7 +77,7 @@ fn main() -> Result<(), PlatformError> {
         Default::default(),
     )?;
 
-    dbg!("Group created", hex::encode(&gid));
+    println!("\nGroup created by Alice: {}", hex::encode(&gid));
 
     // List the members of the group
     let members = mls_platform_api::mls_members(&state_global, &gid, &alice_id)?;
@@ -78,6 +85,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (alice, before adding bob): {members_str:?}");
 
     // Alice adds Bob to a group
+    println!("\nAlice adds Bob to the Group");
     let commit_output_bytes =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
 
@@ -91,6 +99,7 @@ fn main() -> Result<(), PlatformError> {
         .clone();
 
     // Alice process her own commit
+    // println!("\nAlice process her commit to add Bob to the Group");
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
@@ -103,6 +112,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (alice, after adding bob): {members_str:?}");
 
     // Bob joins
+    println!("\nBob joins the group created by Alice");
     mls_platform_api::mls_group_confirm_join(&state_global, &bob_id, welcome.clone(), None)?;
 
     // List the members of the group
@@ -111,6 +121,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (bob, after joining the group): {members_str:?}");
 
     // Bob sends message to alice
+    println!("\nBob sends a message to Alice");
     let ciphertext = mls_platform_api::mls_send(&state_global, &gid, &bob_id, b"hello")?;
 
     // Alice receives the message
@@ -119,9 +130,13 @@ fn main() -> Result<(), PlatformError> {
         &alice_id,
         MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
-    dbg!(format!("{message:?}"));
+    println!(
+        "\nAlice receives the message from Bob {:?}",
+        String::from_utf8(message).unwrap()
+    );
 
     // Bob adds Charlie
+    println!("\nBob adds Charlie to the Group");
     let commit_output_2_bytes =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &bob_id, vec![charlie_kp])?;
 
@@ -136,6 +151,7 @@ fn main() -> Result<(), PlatformError> {
         .clone();
 
     // Bobs process its commit
+    // println!("\nBob process their Commit");
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
@@ -148,6 +164,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (bob, after adding charlie): {members_str:?}");
 
     // Alice receives the commit
+    // println!("\nAlice receives the commit from Bob to add Charlie");
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
@@ -155,6 +172,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     // Charlie joins
+    println!("\nCharlie joins the group");
     mls_platform_api::mls_group_confirm_join(&state_global, &charlie_id, welcome_2.clone(), None)?;
 
     // List the members of the group
@@ -163,6 +181,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (charlie, after joining the group): {members_str:?}");
 
     // Charlie removes Alice from the group
+    println!("\nCharlie removes Alice from the Group");
     let commit_output_3_bytes =
         mls_platform_api::mls_group_remove(&state_global, &gid, &charlie_id, &alice_id)?;
 
@@ -182,6 +201,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (charlie, after removing alice): {members_str:?}");
 
     // Alice receives the commit from Charlie
+    println!("\nAlice receives the remove commit from Charlie");
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
@@ -194,6 +214,7 @@ fn main() -> Result<(), PlatformError> {
     // TODO: Alice should probably delete the group from the state before this point
 
     // Bob receives the commit from Charlie
+    println!("\nBob receives the remove commit from Charlie");
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
@@ -205,6 +226,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (bob, after receiving alice's removal the group): {members_str:?}");
 
     // Generate an exporter for the Group
+    println!("\nAlice exports a group secret");
     let exporter = mls_platform_api::mls_export(
         &state_global,
         &gid,
@@ -217,19 +239,11 @@ fn main() -> Result<(), PlatformError> {
     println!("Exporter: {exporter_str:?}");
 
     // Diana joins externally
-    let diana_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
-
-    let diana_cred = mls_platform_api::mls_generate_credential_basic("diana")?;
-
-    dbg!("Diana identifier", hex::encode(&diana_id));
-
     let mut client_config = ClientConfig::default();
     client_config.allow_external_commits = true;
 
     // Bob produces group info
+    println!("\nBob produce a group info so that someone can do an External join");
     let commit_4_output = mls_platform_api::mls_group_update(
         &mut state_global,
         gid.clone(),
@@ -250,6 +264,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     // Diana joins and sends a message
+    println!("\nDiana uses the group info created by Bob to do an External join");
     let external_commit_output_bytes = mls_platform_api::mls_group_external_commit(
         &state_global,
         diana_id.clone(),
@@ -271,9 +286,12 @@ fn main() -> Result<(), PlatformError> {
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (diane, after joining): {members_str:?}");
 
+    // Diana sends a message to the group
+    println!("\nDiana sends a message to the group");
     let ctx = mls_platform_api::mls_send(&state_global, &gid, &diana_id, b"hello from diana")?;
 
     // Bob receives Diana's commit and message
+    println!("\nBob receives the External Join from Diana");
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
@@ -287,7 +305,10 @@ fn main() -> Result<(), PlatformError> {
     let ptx =
         mls_platform_api::mls_receive(&state_global, &bob_id, MlsMessageOrAck::MlsMessage(ctx))?;
 
-    println!("Bob received message {:?}", String::from_utf8(ptx).unwrap());
+    println!(
+        "\nBob receives Diana's message {:?}",
+        String::from_utf8(ptx).unwrap()
+    );
 
     Ok(())
 }
