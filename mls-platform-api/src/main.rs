@@ -227,7 +227,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Generate an exporter for the Group
     println!("\nAlice exports a group secret");
-    let exporter = mls_platform_api::mls_export(
+    let exporter = mls_platform_api::mls_derive_exporter(
         &state_global,
         &gid,
         &alice_id,

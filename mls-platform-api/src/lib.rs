@@ -823,7 +823,7 @@ pub struct MlsExporterOutput {
 
 pub type MlsExporterOutputJsonBytes = Vec<u8>;
 
-pub fn mls_export(
+pub fn mls_derive_exporter(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
