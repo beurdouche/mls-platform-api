@@ -265,7 +265,11 @@ fn main() -> Result<(), PlatformError> {
     let external_commit_output: mls_platform_api::MlsExternalCommitOutput =
         serde_json::from_slice(&external_commit_output_bytes).unwrap();
 
-    println!("externally joined group {:?}", &external_commit_output.gid);
+    println!("Externally joined group {:?}", &external_commit_output.gid);
+
+    let members = mls_platform_api::mls_members(&state_global, &gid, &diana_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (diane, after joining): {members_str:?}");
 
     let ctx = mls_platform_api::mls_send(&state_global, &gid, &diana_id, b"hello from diana")?;
 
@@ -276,10 +280,14 @@ fn main() -> Result<(), PlatformError> {
         MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
     )?;
 
+    let members = mls_platform_api::mls_members(&state_global, &gid, &diana_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (bob, after diane joined externally): {members_str:?}");
+
     let ptx =
         mls_platform_api::mls_receive(&state_global, &bob_id, MlsMessageOrAck::MlsMessage(ctx))?;
 
-    println!("bob received message {:?}", String::from_utf8(ptx).unwrap());
+    println!("Bob received message {:?}", String::from_utf8(ptx).unwrap());
 
     Ok(())
 }
