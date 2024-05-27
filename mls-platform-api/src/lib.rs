@@ -163,10 +163,6 @@ pub fn mls_generate_signature_keypair(
         .hash(&signature_pubkey)
         .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
-    // Print the signature key
-    // println!("Signature Secret Key: {:?}", hex::encode(&signature_key));
-    // println!("Signature Identifier: {:?}", hex::encode(&identifier));
-
     // Store the signature key pair.
     let _ = state.insert_sigkey(&signature_key, &signature_pubkey, cs, &identifier);
 
@@ -192,8 +188,7 @@ pub fn mls_generate_key_package(
     // Generate a KeyPackage from that client_default
     let key_package = client.generate_key_package_message()?;
 
-    // TODO: We should store the key packages in the state
-    // let kp_bytes = key_package.mls_encode_to_vec()?;
+    // Result
     Ok(key_package)
 }
 
@@ -203,7 +198,7 @@ pub fn mls_generate_key_package(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsMembers {
-    // group_id
+    group_id: GroupId,
     epoch: u64,
     identities: Vec<(Identity, Credential)>,
     // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
@@ -241,7 +236,11 @@ pub fn mls_members(
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
-    let members = MlsMembers { epoch, identities };
+    let members = MlsMembers {
+        group_id: gid.to_vec(),
+        epoch,
+        identities,
+    };
 
     // Encode the message as Json Bytes
     let members_json_string =
@@ -255,7 +254,7 @@ pub fn mls_members(
 /// Group management: Create a Group
 ///
 
-// TODO: We internally set the protocol version to avoid issues with
+// Note: We internally set the protocol version to avoid issues with compat
 
 pub fn mls_group_create(
     pstate: &mut PlatformState,
@@ -819,7 +818,10 @@ pub fn mls_send_custom_proposal(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsExporterOutput {
+    group_id: GroupId,
     epoch: u64,
+    label: Vec<u8>,
+    context: Vec<u8>,
     exporter: Vec<u8>,
 }
 
@@ -840,7 +842,10 @@ pub fn mls_export(
 
     // Construct the output object
     let epoch_and_exporter = MlsExporterOutput {
+        group_id: gid.to_vec(),
         epoch: group.current_epoch(),
+        label: label.to_vec(),
+        context: label.to_vec(),
         exporter: secret,
     };
 
