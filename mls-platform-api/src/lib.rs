@@ -530,7 +530,7 @@ pub fn mls_group_propose_remove(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-    removed: &Identity, // TODO: Handle Vec<Identity>
+    removed: &Identity, // TODO: Make this Vec<Identities>?
 ) -> Result<MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
