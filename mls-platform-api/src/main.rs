@@ -248,8 +248,23 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
+        MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
+    )?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (bob, after commit allowing external join): {members_str:?}");
+
+    // Charlie receives Bob's commit with GroupInfo for External Join
+    mls_platform_api::mls_receive(
+        &state_global,
+        &charlie_id,
         MlsMessageOrAck::MlsMessage(commit_4_output.commit),
     )?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (charlie, after bob's commit allowing external join): {members_str:?}");
 
     // Diana joins and sends a message
     println!("\nDiana uses the group info created by Bob to do an External join");
@@ -282,18 +297,44 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
+        MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after diane joined externally): {members_str:?}");
 
-    let ptx =
-        mls_platform_api::mls_receive(&state_global, &bob_id, MlsMessageOrAck::MlsMessage(ctx))?;
+    let ptx = mls_platform_api::mls_receive(
+        &state_global,
+        &bob_id,
+        MlsMessageOrAck::MlsMessage(ctx.clone()),
+    )?;
 
     println!(
         "\nBob receives Diana's message {:?}",
+        String::from_utf8(ptx).unwrap()
+    );
+
+    // Charlie receives Diana's commit and message
+    println!("\nCharlie receives the External Join from Diana");
+    mls_platform_api::mls_receive(
+        &state_global,
+        &charlie_id,
+        MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
+    )?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (charlie, after diane joined externally): {members_str:?}");
+
+    let ptx = mls_platform_api::mls_receive(
+        &state_global,
+        &charlie_id,
+        MlsMessageOrAck::MlsMessage(ctx),
+    )?;
+
+    println!(
+        "\nCharlie receives Diana's message {:?}",
         String::from_utf8(ptx).unwrap()
     );
 
@@ -302,7 +343,7 @@ fn main() -> Result<(), PlatformError> {
     let self_remove_proposal = mls_group_propose_remove(&state_global, &gid, &bob_id, &bob_id)?;
 
     // Diana receives the proposal from Bob
-    println!("\nDiane commits to the remove");
+    println!("\nDiana commits to the remove");
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
@@ -312,28 +353,66 @@ fn main() -> Result<(), PlatformError> {
     let commit_5_output: mls_platform_api::MlsCommitOutput =
         from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
-    let commit_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
+    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
 
     // Diana processes the remove commit
     println!("\nDiana processes the remove commit");
-    let out_commit_5_diana =
-        mls_platform_api::mls_receive(&state_global, &diana_id, commit_msg.clone())?;
-    let out_commit_5_diana_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_diana)?;
-
-    println!("Diana, out_commit_5 {out_commit_5_diana_str:?}");
+    mls_platform_api::mls_receive(&state_global, &diana_id, commit_5_msg.clone())?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (diane, after removing bob): {members_str:?}");
+    println!("Members (diana, after removing bob): {members_str:?}");
+
+    // Charlie processes the remove commit
+    println!("\nCharlie processes the remove commit");
+    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_5_msg.clone())?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (charlie, after removing bob): {members_str:?}");
 
     // Bob processes the remove commit
     println!("\nBob processes the remove commit");
-    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, commit_msg)?;
+    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, commit_5_msg)?;
     let out_commit_5_bob_str =
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
 
     println!("Bob, out_commit_5 {out_commit_5_bob_str:?}");
+    // Note: Bob cannot look at its own group state because it was already removed
+    // let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    // let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    // println!("Members (bob, after its removal): {members_str:?}");
+
+    // Charlie decides that it's enough and closes the group
+    println!("\nCharlie decides that it's enough and closes the group");
+    let commit_output_6_bytes =
+        mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
+
+    let commit_6_output: mls_platform_api::MlsCommitOutput =
+        from_slice(&commit_output_6_bytes).expect("Failed to deserialize MlsCommitOutput");
+
+    let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_6_output.commit);
+
+    // Diana processes the close commit
+    println!("\nDiana processes the close commit");
+    let out_commit_6_diana =
+        mls_platform_api::mls_receive(&state_global, &diana_id, commit_6_msg.clone())?;
+    let out_commit_6_diana_str =
+        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_6_diana)?;
+
+    println!("Diana, out_commit_6 {out_commit_6_diana_str:?}");
+    // Note: Diana cannot look at its own group state because it was already removed
+
+    // Charlie processes the close commit
+    println!("\nCharlie processes the close commit");
+    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_6_msg)?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (charlie, after processing their group_close commit): {members_str:?}");
+
+    // TODO: The group still exists because Charlie is alone and cannot remove herself
+    // It should be deleted.
 
     Ok(())
 }

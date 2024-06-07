@@ -686,12 +686,12 @@ pub fn mls_group_join(
 
 // TODO: Define a custom proposal instead.
 pub fn mls_group_close(
-    pstate: PlatformState,
-    gid: GroupId,
+    pstate: &PlatformState,
+    gid: &GroupId,
     myself: &Identity,
 ) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
     // Remove everyone from the group.
-    let mut group = pstate.client_default(myself)?.load_group(&gid)?;
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
     let self_index = group.current_member_index();
 
     let all_but_me = group
@@ -786,14 +786,8 @@ pub fn mls_receive(
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
             if !commit.state_update.is_active() {
-                let storage = pstate
-                    .get_sqlite_engine()?
-                    .with_context(myself.to_vec())
-                    .group_state_storage()
-                    .map_err(|_| PlatformError::InternalError)?;
-
-                // Delete the group
-                let _ = storage.delete_group(gid);
+                // Delete the group from the state of the client
+                pstate.delete_group(gid, myself)?;
 
                 // Return the group id and 0xFF..FF epoch to signal the group is closed
                 let result = MlsGroupEpoch {
