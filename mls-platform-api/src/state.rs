@@ -229,6 +229,19 @@ impl PlatformState {
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))
     }
 
+    pub fn delete_group(&self, gid: &[u8], identifier: &Identity) -> Result<(), PlatformError> {
+        let storage = self
+            .get_sqlite_engine()?
+            .with_context(identifier.to_vec())
+            .group_state_storage()
+            .map_err(|_| PlatformError::InternalError)?;
+
+        // Delete the group
+        storage
+            .delete_group(gid)
+            .map_err(|_| PlatformError::InternalError)
+    }
+
     pub fn delete(db_path: String) -> Result<(), PlatformError> {
         let path = Path::new(&db_path);
 
