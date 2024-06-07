@@ -412,7 +412,10 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (charlie, after processing their group_close commit): {members_str:?}");
 
     println!("\nCharlie deletes her state");
-    mls_platform_api::state_delete_group(&state_global, &gid, &charlie_id)?;
+    let out = mls_platform_api::state_delete_group(&state_global, &gid, &charlie_id)?;
+    let out_str = mls_platform_api::utils_json_bytes_to_string_custom(&out)?;
+
+    println!("Charlie, group deletion confirmation {out_str:?}");
 
     Ok(())
 }

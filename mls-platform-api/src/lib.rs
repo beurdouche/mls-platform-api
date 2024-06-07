@@ -97,8 +97,19 @@ pub fn state_delete_group(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<(), PlatformError> {
-    state.delete_group(gid, myself)
+) -> Result<Vec<u8>, PlatformError> {
+    state.delete_group(gid, myself)?;
+
+    // Return the group id and 0xFF..FF epoch to signal the group is closed
+    let result = MlsGroupEpoch {
+        group_id: gid.to_vec(),
+        epoch: 0xFFFFFFFFFFFFFFFF,
+    };
+
+    // Encode the message as Json Bytes
+    let json_string =
+        serde_json::to_string(&result).map_err(|_| PlatformError::JsonConversionError)?;
+    Ok(json_string.as_bytes().to_vec())
 }
 
 ///
