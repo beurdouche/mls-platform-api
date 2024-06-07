@@ -1,10 +1,12 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
+use mls_platform_api::mls_group_propose_remove;
 use mls_platform_api::ClientConfig;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
+use mls_rs::MlsMessage;
 use serde_json::from_slice;
 
 fn main() -> Result<(), PlatformError> {
@@ -309,6 +311,39 @@ fn main() -> Result<(), PlatformError> {
         "\nBob receives Diana's message {:?}",
         String::from_utf8(ptx).unwrap()
     );
+
+    // Bob propose to remove itself
+    println!("\nBob proposes a self remove");
+    let self_remove_proposal = mls_group_propose_remove(&state_global, &gid, &bob_id, &bob_id)?;
+
+    // Diana receives the proposal from Bob
+    println!("\nDiane commits to the remove");
+    let commit_5_output_bytes = mls_platform_api::mls_receive(
+        &state_global,
+        &diana_id,
+        MlsMessageOrAck::MlsMessage(self_remove_proposal),
+    )?;
+
+    let commit_5_output: mls_platform_api::MlsCommitOutput =
+        from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
+
+    let commit_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
+
+    // Diana processes the remove commit
+    println!("\nDiane processes the remove commit");
+    let out = mls_platform_api::mls_receive(&state_global, &diana_id, commit_msg.clone())?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (diane, after removing bob): {members_str:?}");
+
+    // Bob processes the remove commit
+    println!("\nBob processes the remove commit");
+    let out = mls_platform_api::mls_receive(&state_global, &bob_id, commit_msg)?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (bob, after self remove): {members_str:?}");
 
     Ok(())
 }

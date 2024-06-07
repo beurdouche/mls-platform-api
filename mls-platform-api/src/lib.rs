@@ -32,6 +32,7 @@ pub type Identity = Vec<u8>;
 pub type GroupEpoch = u64;
 pub type Credential = Vec<u8>;
 
+#[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum MlsMessageOrAck {
     Ack(GroupId),
@@ -743,6 +744,28 @@ pub fn mls_receive(
     let result = match out? {
         ReceivedMessage::ApplicationMessage(app_data_description) => {
             app_data_description.data().to_vec()
+        }
+        ReceivedMessage::Proposal(proposal) => {
+            // We inconditionally return the commit for the received proposal
+            let commit = group
+                .commit_builder()
+                .raw_proposal(proposal.proposal)
+                .build()?;
+
+            let commit_output = MlsCommitOutput {
+                commit: commit.commit_message,
+                welcome: commit.welcome_messages,
+                group_info: commit.external_commit_group_info,
+                ratchet_tree: commit
+                    .ratchet_tree
+                    .map(|tree| tree.to_bytes())
+                    .transpose()?,
+            };
+
+            // Encode the message as Json Bytes
+            let json_string = serde_json::to_string(&commit_output)
+                .map_err(|_| PlatformError::JsonConversionError)?;
+            json_string.as_bytes().to_vec()
         }
         // TODO: Return the serialized message if not an application message
         _ => "Not an Application Message".as_bytes().to_vec(),
