@@ -114,7 +114,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
-    mls_platform_api::mls_group_confirm_join(&state_global, &bob_id, welcome.clone(), None)?;
+    mls_platform_api::mls_group_join(&state_global, &bob_id, welcome.clone(), None)?;
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
@@ -174,7 +174,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Charlie joins
     println!("\nCharlie joins the group");
-    mls_platform_api::mls_group_confirm_join(&state_global, &charlie_id, welcome_2.clone(), None)?;
+    mls_platform_api::mls_group_join(&state_global, &charlie_id, welcome_2.clone(), None)?;
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;

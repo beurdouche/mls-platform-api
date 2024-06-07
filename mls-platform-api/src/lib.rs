@@ -671,7 +671,7 @@ pub fn mls_group_propose_update(
 /// Process Welcome message.
 ///
 
-pub fn mls_group_confirm_join(
+pub fn mls_group_join(
     pstate: &PlatformState,
     myself: &Identity,
     welcome: MlsMessage,
