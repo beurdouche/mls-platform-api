@@ -242,13 +242,13 @@ fn main() -> Result<(), PlatformError> {
         client_config,
     )?;
 
-    let commit_4_output: mls_platform_api::MlsGroupUpdate = from_slice(&commit_4_output).unwrap();
+    let commit_4_output: mls_platform_api::MlsCommitOutput = from_slice(&commit_4_output).unwrap();
 
     // Bob receives own commit
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(commit_4_output.commit_output.commit),
+        MlsMessageOrAck::MlsMessage(commit_4_output.commit),
     )?;
 
     // Diana joins and sends a message
@@ -258,7 +258,6 @@ fn main() -> Result<(), PlatformError> {
         diana_id.clone(),
         diana_cred,
         commit_4_output
-            .commit_output
             .group_info
             .expect("alice should produce group info"),
         // use tree in extension for now

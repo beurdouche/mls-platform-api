@@ -301,6 +301,7 @@ pub struct MlsCommitOutput {
     pub group_info: Option<MlsMessage>,
     pub ratchet_tree: Option<Vec<u8>>,
     // pub unused_proposals: Vec<crate::mls_rules::ProposalInfo<Proposal>>, from mls_rs
+    pub identity: Option<Identity>,
 }
 
 impl Serialize for MlsCommitOutput {
@@ -405,6 +406,7 @@ impl<'de> Deserialize<'de> for MlsCommitOutput {
                     welcome: welcome.ok_or_else(|| de::Error::missing_field("welcome"))?,
                     group_info,
                     ratchet_tree,
+                    identity: None,
                 })
             }
         }
@@ -442,6 +444,7 @@ pub fn mls_group_add(
         welcome: welcomes,
         group_info: commit_output.external_commit_group_info,
         ratchet_tree: None, // TODO: Handle this !
+        identity: None,
     };
 
     // Write the group to the storage
@@ -516,6 +519,7 @@ pub fn mls_group_remove(
             .ratchet_tree
             .map(|tree| tree.to_bytes())
             .transpose()?,
+        identity: None,
     };
 
     // Encode the message as Json Bytes
@@ -559,14 +563,6 @@ pub fn mls_group_propose_remove(
 /// Key updates
 ///
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MlsGroupUpdate {
-    pub identity: Identity,
-    pub commit_output: MlsCommitOutput,
-}
-
-pub type MlsGroupUpdateJsonBytes = Vec<u8>;
-
 /// TODO: Possibly add a random nonce as an optional parameter.
 pub fn mls_group_update(
     pstate: &mut PlatformState,
@@ -576,7 +572,7 @@ pub fn mls_group_update(
     credential: Option<Credential>,
     group_context_extensions: Option<ExtensionList>,
     config: ClientConfig,
-) -> Result<MlsGroupUpdateJsonBytes, PlatformError> {
+) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     // Propose + Commit
@@ -627,37 +623,33 @@ pub fn mls_group_update(
             .ratchet_tree
             .map(|tree| tree.to_bytes())
             .transpose()?,
+        identity: Some(identity),
     };
     // Generate the signature keypair
     // Return the signing Identity
     // Hash the signingIdentity to get the Identifier
 
-    let group_update = MlsGroupUpdate {
-        identity,
-        commit_output,
-    };
-
     // Encode the message as Json Bytes
     let json_string =
-        serde_json::to_string(&group_update).map_err(|_| PlatformError::JsonConversionError)?;
+        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
     let json_bytes = json_string.as_bytes().to_vec();
 
     Ok(json_bytes)
 }
 
-pub fn mls_group_propose_update(
-    _pstate: &mut PlatformState,
-    _gid: GroupId,
-    _myself: &Identity,
-    _signature_key: Option<Vec<u8>>,
-    // Below is client config
-    _group_context_extensions: Option<ExtensionList>,
-    _leaf_node_extensions: Option<ExtensionList>,
-    _leaf_node_capabilities: Option<Capabilities>,
-    _lifetime: Option<u64>,
-) -> Result<MlsMessage, PlatformError> {
-    unimplemented!()
-}
+// pub fn mls_group_propose_update(
+//     _pstate: &mut PlatformState,
+//     _gid: GroupId,
+//     _myself: &Identity,
+//     _signature_key: Option<Vec<u8>>,
+//     // Below is client config
+//     _group_context_extensions: Option<ExtensionList>,
+//     _leaf_node_extensions: Option<ExtensionList>,
+//     _leaf_node_capabilities: Option<Capabilities>,
+//     _lifetime: Option<u64>,
+// ) -> Result<MlsMessage, PlatformError> {
+//     unimplemented!()
+// }
 
 ///
 /// TODO: Pending commit API
@@ -720,6 +712,7 @@ pub fn mls_group_close(
         welcome: vec![],
         group_info: commit_output.external_commit_group_info,
         ratchet_tree: None, // TODO: Handle this !
+        identity: None,
     };
     // TODO we should delete state when we receive an ACK. but it's not super clear how to
     // determine on receive that this was a "close" commit. Would be easier if we had a custom
@@ -782,6 +775,7 @@ pub fn mls_receive(
                     .ratchet_tree
                     .map(|tree| tree.to_bytes())
                     .transpose()?,
+                identity: None,
             };
 
             // Encode the message as Json Bytes
