@@ -461,10 +461,10 @@ pub fn mls_group_add(
 pub fn mls_group_propose_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
-    myself: Identity,
+    myself: &Identity,
     new_members: Vec<MlsMessage>,
 ) -> Result<Vec<MlsMessage>, PlatformError> {
-    let client = pstate.client_default(&myself)?;
+    let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
 
     let proposals = new_members
