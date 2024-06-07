@@ -787,7 +787,7 @@ pub fn mls_receive(
                 // Delete the group
                 let _ = storage.delete_group(gid);
 
-                // Return the empty group and epoch
+                // Return the group id and 0xFF..FF epoch to signal the group is closed
                 let result = MlsGroupEpoch {
                     group_id: group.group_id().to_vec(),
                     epoch: 0xFFFFFFFFFFFFFFFF,
