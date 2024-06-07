@@ -226,19 +226,6 @@ fn main() -> Result<(), PlatformError> {
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after receiving alice's removal the group): {members_str:?}");
 
-    // Generate an exporter for the Group
-    println!("\nAlice exports a group secret");
-    let exporter = mls_platform_api::mls_derive_exporter(
-        &state_global,
-        &gid,
-        &alice_id,
-        "exporter label".as_bytes(),
-        "exporter context".as_bytes(),
-        32,
-    )?;
-    let exporter_str = mls_platform_api::utils_json_bytes_to_string_custom(&exporter)?;
-    println!("Exporter: {exporter_str:?}");
-
     // Diana joins externally
     let mut client_config = ClientConfig::default();
     client_config.allow_external_commits = true;
@@ -348,10 +335,6 @@ fn main() -> Result<(), PlatformError> {
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
 
     println!("Bob, out_commit_5 {out_commit_5_bob_str:?}");
-
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after self remove): {members_str:?}");
 
     Ok(())
 }

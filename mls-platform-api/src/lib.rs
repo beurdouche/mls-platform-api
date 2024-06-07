@@ -697,7 +697,7 @@ pub fn mls_group_close(
     pstate: PlatformState,
     gid: GroupId,
     myself: &Identity,
-) -> Result<mls_rs::MlsMessage, PlatformError> {
+) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
     // Remove everyone from the group.
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
     let self_index = group.current_member_index();
@@ -708,18 +708,32 @@ pub fn mls_group_close(
         .filter_map(|m| (m.index != self_index).then_some(m.index))
         .collect::<Vec<_>>();
 
-    let commit = all_but_me
+    let commit_output = all_but_me
         .into_iter()
         .try_fold(group.commit_builder(), |builder, index| {
             builder.remove_member(index)
         })?
         .build()?;
 
+    let commit_output = MlsCommitOutput {
+        commit: commit_output.commit_message.clone(),
+        welcome: vec![],
+        group_info: commit_output.external_commit_group_info,
+        ratchet_tree: None, // TODO: Handle this !
+    };
     // TODO we should delete state when we receive an ACK. but it's not super clear how to
     // determine on receive that this was a "close" commit. Would be easier if we had a custom
     // proposal
 
-    Ok(commit.commit_message)
+    // Write the group to the storage
+    group.write_to_storage()?;
+
+    // Encode the message as Json Bytes
+    let js_string =
+        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
+    let js_bytes = js_string.as_bytes().to_vec();
+
+    Ok(js_bytes)
 }
 
 ///
@@ -743,13 +757,13 @@ pub fn mls_receive(
 
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
-    let out = match &message_or_ack {
+    let received_message = match &message_or_ack {
         MlsMessageOrAck::Ack(_) => group.apply_pending_commit().map(ReceivedMessage::Commit),
         MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message.clone()),
     };
 
     //
-    let result = match out? {
+    let result = match received_message? {
         ReceivedMessage::ApplicationMessage(app_data_description) => {
             app_data_description.data().to_vec()
         }
@@ -796,8 +810,12 @@ pub fn mls_receive(
                 // Encode the message as Json Bytes
                 let json_string = serde_json::to_string(&result)
                     .map_err(|_| PlatformError::JsonConversionError)?;
-                json_string.as_bytes().to_vec()
+                return Ok(json_string.as_bytes().to_vec());
             } else {
+                // TODO: Receiving a group_close commit means the sender receiving
+                // is left alone in the group. We should be able delete group automatically.
+                // As of now, the user calling group_close has to delete group manually.
+
                 // If this is a normal commit, return the affected group and new epoch
                 let result = MlsGroupEpoch {
                     group_id: group.group_id().to_vec(),
