@@ -208,11 +208,8 @@ fn main() -> Result<(), PlatformError> {
         &alice_id,
         MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
-
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (alice, after receiving alice's removal the group): {members_str:?}");
-    // TODO: Alice should probably delete the group from the state before this point
+    println!("Alice's state for the group has been removed");
 
     // Bob receives the commit from Charlie
     println!("\nBob receives the remove commit from Charlie");
@@ -378,6 +375,8 @@ fn main() -> Result<(), PlatformError> {
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
 
     println!("Bob, out_commit_5 {out_commit_5_bob_str:?}");
+    println!("Bob's state for the group has been removed");
+
     // Note: Bob cannot look at its own group state because it was already removed
     // let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
     // let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
@@ -401,6 +400,7 @@ fn main() -> Result<(), PlatformError> {
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_6_diana)?;
 
     println!("Diana, out_commit_6 {out_commit_6_diana_str:?}");
+    println!("Diana's state for the group has been removed");
     // Note: Diana cannot look at its own group state because it was already removed
 
     // Charlie processes the close commit
@@ -411,8 +411,8 @@ fn main() -> Result<(), PlatformError> {
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (charlie, after processing their group_close commit): {members_str:?}");
 
-    // TODO: The group still exists because Charlie is alone and cannot remove herself
-    // It should be deleted.
+    println!("\nCharlie deletes her state");
+    mls_platform_api::state_delete_group(&state_global, &gid, &charlie_id)?;
 
     Ok(())
 }

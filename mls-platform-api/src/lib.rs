@@ -91,6 +91,17 @@ pub fn state_delete(name: String) -> Result<(), PlatformError> {
 }
 
 ///
+/// Delete a specific group in the PlatformState.
+///
+pub fn state_delete_group(
+    state: &PlatformState,
+    gid: &GroupId,
+    myself: &Identity,
+) -> Result<(), PlatformError> {
+    state.delete_group(gid, myself)
+}
+
+///
 /// Configurations
 ///
 
