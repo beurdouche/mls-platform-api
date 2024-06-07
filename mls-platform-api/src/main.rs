@@ -6,7 +6,6 @@ use mls_platform_api::ClientConfig;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use mls_rs::MlsMessage;
 use serde_json::from_slice;
 
 fn main() -> Result<(), PlatformError> {
@@ -330,8 +329,13 @@ fn main() -> Result<(), PlatformError> {
     let commit_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
 
     // Diana processes the remove commit
-    println!("\nDiane processes the remove commit");
-    let out = mls_platform_api::mls_receive(&state_global, &diana_id, commit_msg.clone())?;
+    println!("\nDiana processes the remove commit");
+    let out_commit_5_diana =
+        mls_platform_api::mls_receive(&state_global, &diana_id, commit_msg.clone())?;
+    let out_commit_5_diana_str =
+        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_diana)?;
+
+    println!("Diana, out_commit_5 {out_commit_5_diana_str:?}");
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
@@ -339,7 +343,11 @@ fn main() -> Result<(), PlatformError> {
 
     // Bob processes the remove commit
     println!("\nBob processes the remove commit");
-    let out = mls_platform_api::mls_receive(&state_global, &bob_id, commit_msg)?;
+    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, commit_msg)?;
+    let out_commit_5_bob_str =
+        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
+
+    println!("Bob, out_commit_5 {out_commit_5_bob_str:?}");
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;

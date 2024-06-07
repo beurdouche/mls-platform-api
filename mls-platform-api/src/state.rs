@@ -216,7 +216,7 @@ impl PlatformState {
             )
     }
 
-    fn get_sqlite_engine(
+    pub fn get_sqlite_engine(
         &self,
     ) -> Result<SqLiteDataStorageEngine<impl ConnectionStrategy>, PlatformError> {
         let path = Path::new(&self.db_path);

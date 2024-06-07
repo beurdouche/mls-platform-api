@@ -48,6 +48,8 @@ pub enum PlatformError {
     CoreError,
     #[error(transparent)]
     MlsError(#[from] mls_rs::error::MlsError),
+    #[error("InternalError")]
+    InternalError,
     #[error("IdentityError")]
     IdentityError(AnyError),
     #[error("CryptoError")]
@@ -122,6 +124,12 @@ impl Default for GroupConfig {
             options: ExtensionList::new(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct MlsGroupEpoch {
+    group_id: GroupId,
+    epoch: u64,
 }
 
 ///
@@ -735,9 +743,9 @@ pub fn mls_receive(
 
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
-    let out = match message_or_ack {
+    let out = match &message_or_ack {
         MlsMessageOrAck::Ack(_) => group.apply_pending_commit().map(ReceivedMessage::Commit),
-        MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message),
+        MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message.clone()),
     };
 
     //
@@ -767,8 +775,42 @@ pub fn mls_receive(
                 .map_err(|_| PlatformError::JsonConversionError)?;
             json_string.as_bytes().to_vec()
         }
-        // TODO: Return the serialized message if not an application message
-        _ => "Not an Application Message".as_bytes().to_vec(),
+        ReceivedMessage::Commit(commit) => {
+            // Check if the group is active or not after applying the commit
+            if !commit.state_update.is_active() {
+                let storage = pstate
+                    .get_sqlite_engine()?
+                    .with_context(myself.to_vec())
+                    .group_state_storage()
+                    .map_err(|_| PlatformError::InternalError)?;
+
+                // Delete the group
+                let _ = storage.delete_group(gid);
+
+                // Return the empty group and epoch
+                let result = MlsGroupEpoch {
+                    group_id: group.group_id().to_vec(),
+                    epoch: 0xFFFFFFFFFFFFFFFF,
+                };
+
+                // Encode the message as Json Bytes
+                let json_string = serde_json::to_string(&result)
+                    .map_err(|_| PlatformError::JsonConversionError)?;
+                json_string.as_bytes().to_vec()
+            } else {
+                // If this is a normal commit, return the affected group and new epoch
+                let result = MlsGroupEpoch {
+                    group_id: group.group_id().to_vec(),
+                    epoch: group.current_epoch(),
+                };
+
+                // Encode the message as Json Bytes
+                let json_string = serde_json::to_string(&result)
+                    .map_err(|_| PlatformError::JsonConversionError)?;
+                json_string.as_bytes().to_vec()
+            }
+        }
+        _ => "Unsupported Message".as_bytes().to_vec(),
     };
 
     // Write the state to storage
