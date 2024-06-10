@@ -92,6 +92,14 @@ fn main() -> Result<(), PlatformError> {
     println!("Charlie identifier: {}", hex::encode(&charlie_id));
     println!("Diana identifier: {}", hex::encode(&diana_id));
 
+    // Create Key Package for Alice
+    let alice_kp = mls_platform_api::mls_generate_key_package(
+        &state_global,
+        alice_id.clone(),
+        alice_cred.clone(),
+        Default::default(),
+    )?;
+
     // Create Key Package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(
         &state_global,
@@ -443,31 +451,66 @@ fn main() -> Result<(), PlatformError> {
     // println!("Members (bob, after its removal): {members_str:?}");
 
     //
-    // Charlie decides that it's enough and closes the group
+    // Diana proposes to add Alice back to the group
     //
-    println!("\nCharlie decides that it's enough and closes the group");
-    let commit_output_6_bytes =
-        mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
+    println!("\nDiana proposes to Add alice to the group");
+    let proposals_6_bytes = mls_platform_api::mls_group_propose_add(
+        &mut state_global,
+        &gid,
+        &diana_id,
+        vec![alice_kp],
+    )?;
+    let proposal_6_bytes = proposals_6_bytes.first().unwrap();
+
+    //
+    // Diana decide to commit to her own proposal, actually
+    //
+
+    println!("\nDiana decide to handle the add proposal");
+    let commit_6_output_bytes = mls_platform_api::mls_receive(
+        &state_global,
+        &diana_id,
+        MlsMessageOrAck::MlsMessage(proposal_6_bytes.clone()),
+    )?;
 
     let commit_6_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_6_bytes).expect("Failed to deserialize MlsCommitOutput");
+        from_slice(&commit_6_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_6_output.commit);
 
+    println!("\nDiana processes the add commit");
+    mls_platform_api::mls_receive(&state_global, &diana_id, commit_6_msg.clone())?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (diana, after processing their add commit): {members_str:?}");
+
+    //
+    // Charlie decides that it's enough and closes the group
+    //
+    println!("\nCharlie decides that it's enough and closes the group");
+    let commit_output_7_bytes =
+        mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
+
+    let commit_7_output: mls_platform_api::MlsCommitOutput =
+        from_slice(&commit_output_7_bytes).expect("Failed to deserialize MlsCommitOutput");
+
+    let commit_7_msg = MlsMessageOrAck::MlsMessage(commit_7_output.commit);
+
     // Diana processes the close commit
     println!("\nDiana processes the close commit");
-    let out_commit_6_diana =
-        mls_platform_api::mls_receive(&state_global, &diana_id, commit_6_msg.clone())?;
-    let out_commit_6_diana_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_6_diana)?;
+    let out_commit_7_diana =
+        mls_platform_api::mls_receive(&state_global, &diana_id, commit_7_msg.clone())?;
+    let out_commit_7_diana_str =
+        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_7_diana)?;
 
-    println!("Diana, out_commit_6 {out_commit_6_diana_str:?}");
+    println!("Diana, out_commit_7 {out_commit_7_diana_str:?}");
     println!("Diana's state for the group has been removed");
     // Note: Diana cannot look at its own group state because it was already removed
 
     // Charlie processes the close commit
     println!("\nCharlie processes the close commit");
-    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_6_msg)?;
+    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_7_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
