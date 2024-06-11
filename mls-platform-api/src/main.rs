@@ -93,7 +93,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Diana identifier: {}", hex::encode(&diana_id));
 
     // Create Key Package for Alice
-    let alice_kp = mls_platform_api::mls_generate_key_package(
+    let alice_kp2 = mls_platform_api::mls_generate_key_package(
         &state_global,
         alice_id.clone(),
         alice_cred.clone(),
@@ -403,7 +403,7 @@ fn main() -> Result<(), PlatformError> {
     // Bob proposes to remove itself
     //
     println!("\nBob proposes a self remove");
-    let self_remove_proposal = mls_group_propose_remove(&state_global, &gid, &bob_id, &bob_id)?;
+    let bob_remove_proposal = mls_group_propose_remove(&state_global, &gid, &bob_id, &bob_id)?;
 
     //
     // Diana receives the proposal from Bob
@@ -412,7 +412,7 @@ fn main() -> Result<(), PlatformError> {
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
-        MlsMessageOrAck::MlsMessage(self_remove_proposal),
+        MlsMessageOrAck::MlsMessage(bob_remove_proposal),
     )?;
 
     let commit_5_output: mls_platform_api::MlsCommitOutput =
@@ -463,13 +463,17 @@ fn main() -> Result<(), PlatformError> {
     let proposal_6_bytes = proposals_6_bytes.first().unwrap();
 
     //
-    // Diana decide to commit to her own proposal, actually
+    // Charlie decides to commit to Diana's proposal
     //
 
-    println!("\nDiana decide to handle the add proposal");
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("\nMembers (charlie, before processing the add proposal): {members_str:?}");
+
+    println!("\nCharlie decides to commit to Diana's proposal");
     let commit_6_output_bytes = mls_platform_api::mls_receive(
         &state_global,
-        &diana_id,
+        &charlie_id,
         MlsMessageOrAck::MlsMessage(proposal_6_bytes.clone()),
     )?;
 
@@ -478,12 +482,19 @@ fn main() -> Result<(), PlatformError> {
 
     let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_6_output.commit);
 
+    println!("\nCharlie processes the add commit");
+    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_6_msg.clone())?;
+
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
+    println!("Members (charlie, after processing the add commit): {members_str:?}");
+
     println!("\nDiana processes the add commit");
     mls_platform_api::mls_receive(&state_global, &diana_id, commit_6_msg.clone())?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (diana, after processing their add commit): {members_str:?}");
+    println!("Members (diana, after processing the add commit): {members_str:?}");
 
     //
     // Charlie decides that it's enough and closes the group
