@@ -93,7 +93,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Diana identifier: {}", hex::encode(&diana_id));
 
     // Create Key Package for Alice
-    let alice_kp2 = mls_platform_api::mls_generate_key_package(
+    let alice_kp = mls_platform_api::mls_generate_key_package(
         &state_global,
         alice_id.clone(),
         alice_cred.clone(),
