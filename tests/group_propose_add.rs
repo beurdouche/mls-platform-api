@@ -144,7 +144,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     let proposal_add_bytes = proposals_add_bytes.first().unwrap();
 
-    // Alice receives the Add proposal
+    // Alice receives the Add proposal and commits to it
     println!("\nAlice commits to the add");
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
@@ -152,47 +152,57 @@ fn test_propose_add() -> Result<(), PlatformError> {
         MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
 
-    // let commit_5_output: mls_platform_api::MlsCommitOutput =
-    //     from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
+    let commit_5_output: mls_platform_api::MlsCommitOutput =
+        from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
-    // let commit_5 = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
-    // let welcome_5 = commit_5_output
-    //     .welcome
-    //     .first()
-    //     .expect("No welcome messages found")
-    //     .clone();
+    // Bobs process the commit
+    println!("\nBob receives the commit");
+    mls_platform_api::mls_receive(
+        &state_global,
+        &bob_id,
+        MlsMessageOrAck::MlsMessage(commit_5_output.commit.clone()),
+    )?;
 
-    // // List the members of the group
-    // let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    // let members_alice_str =
-    //     mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
-    // println!("Members (alice, after adding charlie): {members_alice_str:?}");
+    // List the members of the group
+    let members_bob_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members_bob_str = mls_platform_api::utils_json_bytes_to_string_custom(&members_bob_bytes)?;
+    println!("Members (bob, after adding charlie): {members_bob_str:?}");
 
-    // // Bobs process its commit
-    // println!("\nBob process their Commit");
-    // mls_platform_api::mls_receive(
-    //     &state_global,
-    //     &bob_id,
-    //     MlsMessageOrAck::MlsMessage(commit_2.clone()),
-    // )?;
+    // Alice receives the commit
+    println!("\nAlice receives the commit");
+    mls_platform_api::mls_receive(
+        &state_global,
+        &alice_id,
+        MlsMessageOrAck::MlsMessage(commit_5_output.commit),
+    )?;
 
-    // // Alice receives the commit
-    // println!("\nAlice receives the commit from Bob to add Charlie");
-    // mls_platform_api::mls_receive(
-    //     &state_global,
-    //     &alice_id,
-    //     MlsMessageOrAck::MlsMessage(commit_2),
-    // )?;
+    // List the members of the group
+    let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members_alice_str =
+        mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
+    println!("Members (alice, after adding charlie): {members_alice_str:?}");
 
-    // // Charlie joins
-    // println!("\nCharlie joins the group");
-    // mls_platform_api::mls_group_join(&state_global, &charlie_id, welcome_2.clone(), None)?;
+    // Extract the welcome from the commit output
+    let welcome_5 = commit_5_output
+        .welcome
+        .first()
+        .expect("No welcome messages found")
+        .clone();
 
-    // // List the members of the group
-    // let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    // let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    // println!("Members (charlie, after joining the group): {members_str:?}");
+    // Charlie joins
+    println!("\nCharlie joins the group");
+    mls_platform_api::mls_group_join(&state_global, &charlie_id, welcome_5.clone(), None)?;
 
-    assert!(false);
+    // List the members of the group
+    let members_charlie_bytes =
+        mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_charlie_str =
+        mls_platform_api::utils_json_bytes_to_string_custom(&members_charlie_bytes)?;
+    println!("Members (charlie, after joining the group): {members_charlie_str:?}");
+
+    // Test that Alice, Bob and Charlie are in the same group
+    assert!(members_alice_bytes == members_bob_bytes);
+    assert!(members_bob_bytes == members_charlie_bytes);
+
     Ok(())
 }

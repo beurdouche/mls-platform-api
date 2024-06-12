@@ -577,6 +577,10 @@ pub fn mls_group_propose_remove(
         .ok_or(PlatformError::UndefinedIdentity)?;
 
     let proposal = group.propose_remove(removed, vec![])?;
+
+    // Remember the proposal
+    group.write_to_storage()?;
+
     Ok(proposal)
 }
 
@@ -783,10 +787,9 @@ pub fn mls_receive(
         }
         ReceivedMessage::Proposal(proposal) => {
             // We inconditionally return the commit for the received proposal
-            let commit = group
-                .commit_builder()
-                .raw_proposal(proposal.proposal)
-                .build()?;
+            let commit = group.commit(vec![])?;
+
+            group.write_to_storage()?;
 
             let commit_output = MlsCommitOutput {
                 commit: commit.commit_message,

@@ -407,7 +407,7 @@ fn main() -> Result<(), PlatformError> {
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
-        MlsMessageOrAck::MlsMessage(self_remove_proposal),
+        MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
     let commit_5_output: mls_platform_api::MlsCommitOutput =
@@ -425,6 +425,11 @@ fn main() -> Result<(), PlatformError> {
 
     // Charlie processes the remove commit
     println!("\nCharlie processes the remove commit");
+    mls_platform_api::mls_receive(
+        &state_global,
+        &charlie_id,
+        MlsMessageOrAck::MlsMessage(self_remove_proposal),
+    )?;
     mls_platform_api::mls_receive(&state_global, &charlie_id, commit_5_msg.clone())?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;

@@ -196,7 +196,7 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        MlsMessageOrAck::MlsMessage(self_remove_proposal),
+        MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
     let commit_5_output: mls_platform_api::MlsCommitOutput =
@@ -206,6 +206,11 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
 
     // Alice processes the remove commit
     println!("\nAlice processes the remove commit");
+    mls_platform_api::mls_receive(
+        &state_global,
+        &alice_id,
+        MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
+    )?;
     mls_platform_api::mls_receive(&state_global, &alice_id, commit_5_msg.clone())?;
 
     let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
@@ -225,6 +230,14 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
 
     // Bob processes the remove commit
     println!("\nBob processes the remove commit");
+
+    // https://github.com/awslabs/mls-rs/pull/154
+    // mls_platform_api::mls_receive(
+    //     &state_global,
+    //     &bob_id,
+    //     MlsMessageOrAck::MlsMessage(self_remove_proposal),
+    // )?;
+
     let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, commit_5_msg)?;
     let out_commit_5_bob_str =
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
