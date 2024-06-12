@@ -225,9 +225,9 @@ pub fn mls_generate_key_package(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsGroupMembers {
-    group_id: GroupId,
-    epoch: u64,
-    identities: Vec<(Identity, Credential)>,
+    pub group_id: GroupId,
+    pub epoch: u64,
+    pub identities: Vec<(Identity, Credential)>,
     // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
@@ -433,8 +433,7 @@ impl<'de> Deserialize<'de> for MlsCommitOutput {
             }
         }
 
-        const FIELDS: &'static [&'static str] =
-            &["commit", "welcome", "group_info", "ratchet_tree"];
+        const FIELDS: &[&str] = &["commit", "welcome", "group_info", "ratchet_tree"];
         deserializer.deserialize_struct("MlsCommitOutput", FIELDS, MlsCommitOutputVisitor)
     }
 }
@@ -624,11 +623,11 @@ pub fn mls_group_update(
 
         let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut cred.as_slice())?;
         let signing_identity = SigningIdentity::new(decoded_cred, signature_public_key);
-        let identity = cipher_suite_provider
-            .hash(&signing_identity.signature_key)
-            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
-        identity
+        // Return the identity
+        cipher_suite_provider
+            .hash(&signing_identity.signature_key)
+            .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?
     } else {
         myself
     };
@@ -1019,7 +1018,7 @@ impl<'de> Deserialize<'de> for MlsExternalCommitOutput {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["gid", "external_commit"];
+        const FIELDS: &[&str] = &["gid", "external_commit"];
         deserializer.deserialize_struct(
             "MlsExternalCommitOutput",
             FIELDS,

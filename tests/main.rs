@@ -48,6 +48,7 @@ use serde_json::from_slice;
 //   - Charlie processes the close commit
 // * Charlie removes her state for the group (state_delete_group)
 
+#[test]
 fn main() -> Result<(), PlatformError> {
     // Default group configuration
     let group_config = mls_platform_api::GroupConfig::default();
@@ -142,7 +143,7 @@ fn main() -> Result<(), PlatformError> {
         .clone();
 
     // Alice process her own commit
-    // println!("\nAlice process her commit to add Bob to the Group");
+    println!("\nAlice process her commit to add Bob to the Group");
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
@@ -159,7 +160,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_join(&state_global, &bob_id, welcome.clone(), None)?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
     println!("Members (bob, after joining the group): {members_str:?}");
 
@@ -198,7 +199,7 @@ fn main() -> Result<(), PlatformError> {
         .clone();
 
     // Bobs process its commit
-    // println!("\nBob process their Commit");
+    println!("\nBob process their Commit");
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
@@ -211,7 +212,7 @@ fn main() -> Result<(), PlatformError> {
     println!("Members (bob, after adding charlie): {members_str:?}");
 
     // Alice receives the commit
-    // println!("\nAlice receives the commit from Bob to add Charlie");
+    println!("\nAlice receives the commit from Bob to add Charlie");
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
@@ -275,8 +276,10 @@ fn main() -> Result<(), PlatformError> {
     //
     // Bob produces group info to allow an external join from Diana
     //
-    let mut client_config = ClientConfig::default();
-    client_config.allow_external_commits = true;
+    let client_config = ClientConfig {
+        allow_external_commits: true,
+        ..Default::default()
+    };
 
     println!("\nBob produce a group info so that someone can do an External join");
     let commit_4_output = mls_platform_api::mls_group_update(
