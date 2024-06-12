@@ -24,7 +24,7 @@ use serde_json::from_slice;
 //   - Charlie joins the group
 
 #[test]
-fn test_group_close() -> Result<(), PlatformError> {
+fn test_propose_add() -> Result<(), PlatformError> {
     // Default group configuration
     let group_config = mls_platform_api::GroupConfig::default();
 
