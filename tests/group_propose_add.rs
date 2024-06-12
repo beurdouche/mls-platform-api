@@ -145,28 +145,28 @@ fn test_group_close() -> Result<(), PlatformError> {
     let proposal_add_bytes = proposals_add_bytes.first().unwrap();
 
     // Alice receives the Add proposal
-    println!("\nAlice commits to the remove");
+    println!("\nAlice commits to the add");
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
         MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
 
-    let commit_5_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
+    // let commit_5_output: mls_platform_api::MlsCommitOutput =
+    //     from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
-    let commit_5 = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
-    let welcome_5 = commit_5_output
-        .welcome
-        .first()
-        .expect("No welcome messages found")
-        .clone();
+    // let commit_5 = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
+    // let welcome_5 = commit_5_output
+    //     .welcome
+    //     .first()
+    //     .expect("No welcome messages found")
+    //     .clone();
 
-    // List the members of the group
-    let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_alice_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
-    println!("Members (alice, after adding charlie): {members_alice_str:?}");
+    // // List the members of the group
+    // let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    // let members_alice_str =
+    //     mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
+    // println!("Members (alice, after adding charlie): {members_alice_str:?}");
 
     // // Bobs process its commit
     // println!("\nBob process their Commit");
