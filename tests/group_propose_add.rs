@@ -29,7 +29,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     let group_config = mls_platform_api::GroupConfig::default();
 
     // Storage states
-    let mut state_global = mls_platform_api::state_access("global.db".into(), [0u8; 32])?;
+    let mut state_global = mls_platform_api::state_access("global.db", &[0u8; 32])?;
 
     // Credentials
     let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
@@ -41,20 +41,14 @@ fn test_propose_add() -> Result<(), PlatformError> {
     println!("Charlie credential: {}", hex::encode(&charlie_cred));
 
     // Create signature keypairs and store them in the state
-    let alice_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let alice_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
-    let bob_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let bob_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
-    let charlie_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let charlie_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
     println!("\nAlice identifier: {}", hex::encode(&alice_id));
     println!("Bob identifier: {}", hex::encode(&bob_id));
@@ -63,27 +57,27 @@ fn test_propose_add() -> Result<(), PlatformError> {
     // Create Key Package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(
         &state_global,
-        bob_id.clone(),
-        bob_cred,
-        Default::default(),
+        &bob_id,
+        &bob_cred,
+        &Default::default(),
     )?;
 
     // Create Key Package for Charlie
     let charlie_kp = mls_platform_api::mls_generate_key_package(
         &state_global,
-        charlie_id.clone(),
-        charlie_cred,
-        Default::default(),
+        &charlie_id,
+        &charlie_cred,
+        &Default::default(),
     )?;
 
     // Create a group with Alice
     let gid = mls_platform_api::mls_group_create(
         &mut state_global,
         &alice_id,
-        alice_cred,
+        &alice_cred,
         None,
         None,
-        Default::default(),
+        &Default::default(),
     )?;
 
     println!("\nGroup created by Alice: {}", hex::encode(&gid));
@@ -114,7 +108,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -124,7 +118,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
-    mls_platform_api::mls_group_join(&state_global, &bob_id, welcome.clone(), None)?;
+    mls_platform_api::mls_group_join(&state_global, &bob_id, &welcome, None)?;
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -149,7 +143,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
+        &MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
 
     let commit_5_output: mls_platform_api::MlsCommitOutput =
@@ -160,7 +154,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(commit_5_output.commit.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_5_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -173,7 +167,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(commit_5_output.commit),
+        &MlsMessageOrAck::MlsMessage(commit_5_output.commit),
     )?;
 
     // List the members of the group
@@ -191,7 +185,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // Charlie joins
     println!("\nCharlie joins the group");
-    mls_platform_api::mls_group_join(&state_global, &charlie_id, welcome_5.clone(), None)?;
+    mls_platform_api::mls_group_join(&state_global, &charlie_id, &welcome_5, None)?;
 
     // List the members of the group
     let members_charlie_bytes =

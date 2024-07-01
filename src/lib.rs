@@ -79,14 +79,14 @@ pub enum PlatformError {
 ///
 /// Generate or Retrieve a PlatformState.
 ///
-pub fn state_access(name: String, key: [u8; 32]) -> Result<PlatformState, PlatformError> {
+pub fn state_access(name: &str, key: &[u8; 32]) -> Result<PlatformState, PlatformError> {
     PlatformState::new(name, key)
 }
 
 ///
 /// Delete a PlatformState.
 ///
-pub fn state_delete(name: String) -> Result<(), PlatformError> {
+pub fn state_delete(name: &str) -> Result<(), PlatformError> {
     PlatformState::delete(name)
 }
 
@@ -168,7 +168,7 @@ pub fn mls_generate_credential_basic(name: &str) -> Result<Credential, PlatformE
 /// Generate a Signature Keypair
 ///
 pub fn mls_generate_signature_keypair(
-    state: &mut PlatformState,
+    state: &PlatformState,
     cs: CipherSuite,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, PlatformError> {
@@ -191,7 +191,7 @@ pub fn mls_generate_signature_keypair(
         .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
     // Store the signature key pair.
-    let _ = state.insert_sigkey(&signature_key, &signature_pubkey, cs, &identifier);
+    state.insert_sigkey(&signature_key, &signature_pubkey, cs, &identifier)?;
 
     Ok(identifier)
 }
@@ -201,16 +201,16 @@ pub fn mls_generate_signature_keypair(
 ///
 pub fn mls_generate_key_package(
     state: &PlatformState,
-    myself: Identity,
-    credential: Credential,
-    config: ClientConfig,
+    myself: &Identity,
+    credential: &Credential,
+    config: &ClientConfig,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
     // Decode the Credential
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
     // Create a client for that state
-    let client = state.client(&myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
+    let client = state.client(myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
 
     // Generate a KeyPackage from that client_default
     let key_package = client.generate_key_package_message()?;
@@ -286,10 +286,10 @@ pub fn mls_group_members(
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
-    credential: Credential,
-    gid: Option<GroupId>,
+    credential: &Credential,
+    gid: Option<&GroupId>,
     group_context_extensions: Option<ExtensionList>,
-    config: ClientConfig,
+    config: &ClientConfig,
 ) -> Result<GroupId, PlatformError> {
     // Build the client
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
@@ -298,10 +298,11 @@ pub fn mls_group_create(
 
     // Generate a GroupId if none is provided
     let mut group = match gid {
-        Some(gid) => {
-            client.create_group_with_id(gid, group_context_extensions.unwrap_or_default())?
-        }
-        None => client.create_group(group_context_extensions.unwrap_or_default())?,
+        Some(gid) => client.create_group_with_id(
+            gid.to_vec(),
+            group_context_extensions.unwrap_or_default().clone(),
+        )?,
+        None => client.create_group(group_context_extensions.unwrap_or_default().clone())?,
     };
 
     // The state needs to be returned or stored somewhere
@@ -591,12 +592,12 @@ pub fn mls_group_propose_remove(
 /// TODO: Possibly add a random nonce as an optional parameter.
 pub fn mls_group_update(
     pstate: &mut PlatformState,
-    gid: GroupId,
-    myself: Identity,
-    signature_key: Option<Vec<u8>>,
-    credential: Option<Credential>,
+    gid: &GroupId,
+    myself: &Identity,
+    signature_key: Option<&Vec<u8>>,
+    credential: Option<&Credential>,
     group_context_extensions: Option<ExtensionList>,
-    config: ClientConfig,
+    config: &ClientConfig,
 ) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -606,8 +607,8 @@ pub fn mls_group_update(
         .map(|credential| mls_rs::identity::Credential::mls_decode(&mut credential.as_slice()))
         .transpose()?;
 
-    let client = pstate.client(&myself, decoded_cred, ProtocolVersion::MLS_10, config)?;
-    let mut group = client.load_group(&gid)?;
+    let client = pstate.client(myself, decoded_cred, ProtocolVersion::MLS_10, config)?;
+    let mut group = client.load_group(gid)?;
 
     let cipher_suite_provider = crypto_provider
         .cipher_suite_provider(group.cipher_suite())
@@ -620,7 +621,7 @@ pub fn mls_group_update(
     }
 
     let identity = if let Some((key, cred)) = signature_key.zip(credential) {
-        let signature_secret_key = key.into();
+        let signature_secret_key = key.clone().into();
         let signature_public_key = cipher_suite_provider
             .signature_key_derive_public(&signature_secret_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
@@ -633,7 +634,7 @@ pub fn mls_group_update(
             .hash(&signing_identity.signature_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?
     } else {
-        myself
+        myself.clone()
     };
 
     let commit = commit_builder.build()?;
@@ -691,11 +692,11 @@ pub fn mls_group_update(
 pub fn mls_group_join(
     pstate: &PlatformState,
     myself: &Identity,
-    welcome: MlsMessage,
+    welcome: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<GroupId, PlatformError> {
     let client = pstate.client_default(myself)?;
-    let (mut group, _info) = client.join_group(ratchet_tree, &welcome)?;
+    let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
     let gid = group.group_id().to_vec();
 
     // Store the state
@@ -761,7 +762,7 @@ pub fn mls_group_close(
 pub fn mls_receive(
     pstate: &PlatformState,
     myself: &Identity,
-    message_or_ack: MlsMessageOrAck,
+    message_or_ack: &MlsMessageOrAck,
 ) -> Result<Vec<u8>, PlatformError> {
     // Extract the gid from the Message
     let gid = match &message_or_ack {
@@ -785,8 +786,8 @@ pub fn mls_receive(
         ReceivedMessage::ApplicationMessage(app_data_description) => {
             app_data_description.data().to_vec()
         }
-        ReceivedMessage::Proposal(proposal) => {
-            // We inconditionally return the commit for the received proposal
+        ReceivedMessage::Proposal(_proposal) => {
+            // TODO: We inconditionally return the commit for the received proposal
             let commit = group.commit(vec![])?;
 
             group.write_to_storage()?;
@@ -1034,18 +1035,18 @@ pub type MlsExternalCommitOutputJsonBytes = Vec<u8>;
 
 pub fn mls_group_external_commit(
     pstate: &PlatformState,
-    myself: Identity,
-    credential: Credential,
-    group_info: MlsMessage,
+    myself: &Identity,
+    credential: &Credential,
+    group_info: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<MlsExternalCommitOutputJsonBytes, PlatformError> {
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
     let client = pstate.client(
-        &myself,
+        myself,
         Some(decoded_cred),
         ProtocolVersion::MLS_10,
-        ClientConfig::default(),
+        &ClientConfig::default(),
     )?;
 
     let mut commit_builder = client.external_commit_builder()?;
@@ -1054,7 +1055,7 @@ pub fn mls_group_external_commit(
         commit_builder = commit_builder.with_tree_data(ratchet_tree);
     }
 
-    let (mut group, external_commit) = commit_builder.build(group_info)?;
+    let (mut group, external_commit) = commit_builder.build(group_info.clone())?;
     let gid = group.group_id().to_vec();
 
     // Store the state

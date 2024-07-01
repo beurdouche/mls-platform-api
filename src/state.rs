@@ -68,8 +68,11 @@ pub struct SignatureData {
 }
 
 impl PlatformState {
-    pub fn new(db_path: String, db_key: [u8; 32]) -> Result<Self, PlatformError> {
-        let state = Self { db_path, db_key };
+    pub fn new(db_path: &str, db_key: &[u8; 32]) -> Result<Self, PlatformError> {
+        let state = Self {
+            db_path: db_path.to_string(),
+            db_key: *db_key,
+        };
 
         // This will create an empty database if it doesn't exist.
         state
@@ -89,7 +92,7 @@ impl PlatformState {
         myself_identifier: &Identity,
         myself_credential: Option<Credential>,
         version: ProtocolVersion,
-        config: ClientConfig,
+        config: &ClientConfig,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
 
@@ -126,12 +129,12 @@ impl PlatformState {
             )
             .protocol_version(version);
 
-        if let Some(key_package_extensions) = config.key_package_extensions {
-            builder = builder.key_package_extensions(key_package_extensions);
+        if let Some(key_package_extensions) = &config.key_package_extensions {
+            builder = builder.key_package_extensions(key_package_extensions.clone());
         };
 
-        if let Some(leaf_node_extensions) = config.leaf_node_extensions {
-            builder = builder.leaf_node_extensions(leaf_node_extensions);
+        if let Some(leaf_node_extensions) = &config.leaf_node_extensions {
+            builder = builder.leaf_node_extensions(leaf_node_extensions.clone());
         }
 
         if let Some(key_package_lifetime_s) = config.key_package_lifetime_s {
@@ -155,7 +158,7 @@ impl PlatformState {
             myself_identifier,
             None,
             ProtocolVersion::MLS_10,
-            Default::default(),
+            &Default::default(),
         )
     }
 
@@ -242,8 +245,8 @@ impl PlatformState {
             .map_err(|_| PlatformError::InternalError)
     }
 
-    pub fn delete(db_path: String) -> Result<(), PlatformError> {
-        let path = Path::new(&db_path);
+    pub fn delete(db_path: &str) -> Result<(), PlatformError> {
+        let path = Path::new(db_path);
 
         if path.exists() {
             std::fs::remove_file(path)?;

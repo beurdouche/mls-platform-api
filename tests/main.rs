@@ -54,7 +54,7 @@ fn main() -> Result<(), PlatformError> {
     let group_config = mls_platform_api::GroupConfig::default();
 
     // Storage states
-    let mut state_global = mls_platform_api::state_access("global.db".into(), [0u8; 32])?;
+    let mut state_global = mls_platform_api::state_access("global.db", &[0u8; 32])?;
 
     // Credentials
     let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
@@ -68,25 +68,17 @@ fn main() -> Result<(), PlatformError> {
     println!("Diana credential: {}", hex::encode(&diana_cred));
 
     // Create signature keypairs and store them in the state
-    let alice_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let alice_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
-    let bob_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let bob_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
-    let charlie_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let charlie_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
-    let diana_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let diana_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
     println!("\nAlice identifier: {}", hex::encode(&alice_id));
     println!("Bob identifier: {}", hex::encode(&bob_id));
@@ -96,27 +88,27 @@ fn main() -> Result<(), PlatformError> {
     // Create Key Package for Bob
     let bob_kp = mls_platform_api::mls_generate_key_package(
         &state_global,
-        bob_id.clone(),
-        bob_cred,
-        Default::default(),
+        &bob_id,
+        &bob_cred,
+        &Default::default(),
     )?;
 
     // Create Key Package for Charlie
     let charlie_kp = mls_platform_api::mls_generate_key_package(
         &state_global,
-        charlie_id.clone(),
-        charlie_cred,
-        Default::default(),
+        &charlie_id,
+        &charlie_cred,
+        &Default::default(),
     )?;
 
     // Create a group with Alice
     let gid = mls_platform_api::mls_group_create(
         &mut state_global,
         &alice_id,
-        alice_cred,
+        &alice_cred,
         None,
         None,
-        Default::default(),
+        &Default::default(),
     )?;
 
     println!("\nGroup created by Alice: {}", hex::encode(&gid));
@@ -147,7 +139,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -157,7 +149,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
-    mls_platform_api::mls_group_join(&state_global, &bob_id, welcome.clone(), None)?;
+    mls_platform_api::mls_group_join(&state_global, &bob_id, &welcome, None)?;
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -174,7 +166,7 @@ fn main() -> Result<(), PlatformError> {
     let message = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(ciphertext),
+        &MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
     println!(
         "\nAlice receives the message from Bob {:?}",
@@ -203,7 +195,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(commit_2.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_2.clone()),
     )?;
 
     // List the members of the group
@@ -216,12 +208,12 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(commit_2),
+        &MlsMessageOrAck::MlsMessage(commit_2),
     )?;
 
     // Charlie joins
     println!("\nCharlie joins the group");
-    mls_platform_api::mls_group_join(&state_global, &charlie_id, welcome_2.clone(), None)?;
+    mls_platform_api::mls_group_join(&state_global, &charlie_id, &welcome_2, None)?;
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
@@ -244,7 +236,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        MlsMessageOrAck::Ack(gid.to_vec()),
+        &MlsMessageOrAck::Ack(gid.to_vec()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
@@ -256,7 +248,7 @@ fn main() -> Result<(), PlatformError> {
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        MlsMessageOrAck::MlsMessage(commit_3.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
     println!("Members (alice, after receiving alice's removal the group): {members_str:?}");
     println!("Alice's state for the group has been removed");
@@ -266,7 +258,7 @@ fn main() -> Result<(), PlatformError> {
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(commit_3.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -284,12 +276,12 @@ fn main() -> Result<(), PlatformError> {
     println!("\nBob produce a group info so that someone can do an External join");
     let commit_4_output = mls_platform_api::mls_group_update(
         &mut state_global,
-        gid.clone(),
-        bob_id.clone(),
+        &gid,
+        &bob_id,
         None,
         None,
         None,
-        client_config,
+        &client_config,
     )?;
 
     let commit_4_output: mls_platform_api::MlsCommitOutput = from_slice(&commit_4_output).unwrap();
@@ -298,7 +290,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
+        &MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -309,7 +301,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        MlsMessageOrAck::MlsMessage(commit_4_output.commit),
+        &MlsMessageOrAck::MlsMessage(commit_4_output.commit),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
@@ -322,9 +314,9 @@ fn main() -> Result<(), PlatformError> {
     println!("\nDiana uses the group info created by Bob to do an External join");
     let external_commit_output_bytes = mls_platform_api::mls_group_external_commit(
         &state_global,
-        diana_id.clone(),
-        diana_cred,
-        commit_4_output
+        &diana_id,
+        &diana_cred,
+        &commit_4_output
             .group_info
             .expect("alice should produce group info"),
         // use tree in extension for now
@@ -351,7 +343,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
+        &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
@@ -362,7 +354,7 @@ fn main() -> Result<(), PlatformError> {
     let ptx = mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        MlsMessageOrAck::MlsMessage(ctx.clone()),
+        &MlsMessageOrAck::MlsMessage(ctx.clone()),
     )?;
 
     println!(
@@ -375,7 +367,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
+        &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
@@ -386,7 +378,7 @@ fn main() -> Result<(), PlatformError> {
     let ptx = mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        MlsMessageOrAck::MlsMessage(ctx),
+        &MlsMessageOrAck::MlsMessage(ctx),
     )?;
 
     println!(
@@ -407,7 +399,7 @@ fn main() -> Result<(), PlatformError> {
     let commit_5_output_bytes = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
-        MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
+        &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
     let commit_5_output: mls_platform_api::MlsCommitOutput =
@@ -417,7 +409,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Diana processes the remove commit
     println!("\nDiana processes the remove commit");
-    mls_platform_api::mls_receive(&state_global, &diana_id, commit_5_msg.clone())?;
+    mls_platform_api::mls_receive(&state_global, &diana_id, &commit_5_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
@@ -428,9 +420,9 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        MlsMessageOrAck::MlsMessage(self_remove_proposal),
+        &MlsMessageOrAck::MlsMessage(self_remove_proposal),
     )?;
-    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_5_msg.clone())?;
+    mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_5_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
@@ -438,7 +430,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Bob processes the remove commit
     println!("\nBob processes the remove commit");
-    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, commit_5_msg)?;
+    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
     let out_commit_5_bob_str =
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
 
@@ -465,7 +457,7 @@ fn main() -> Result<(), PlatformError> {
     // Diana processes the close commit
     println!("\nDiana processes the close commit");
     let out_commit_6_diana =
-        mls_platform_api::mls_receive(&state_global, &diana_id, commit_6_msg.clone())?;
+        mls_platform_api::mls_receive(&state_global, &diana_id, &commit_6_msg)?;
     let out_commit_6_diana_str =
         mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_6_diana)?;
 
@@ -475,7 +467,7 @@ fn main() -> Result<(), PlatformError> {
 
     // Charlie processes the close commit
     println!("\nCharlie processes the close commit");
-    mls_platform_api::mls_receive(&state_global, &charlie_id, commit_6_msg)?;
+    mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_6_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;

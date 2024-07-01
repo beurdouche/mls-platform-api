@@ -17,7 +17,7 @@ fn test_group_create() -> Result<(), PlatformError> {
     let group_config = mls_platform_api::GroupConfig::default();
 
     // Storage states
-    let mut state_global = mls_platform_api::state_access("global.db".into(), [0u8; 32])?;
+    let mut state_global = mls_platform_api::state_access("global.db", &[0u8; 32])?;
 
     // Credentials
     let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
@@ -25,10 +25,8 @@ fn test_group_create() -> Result<(), PlatformError> {
     println!("\nAlice credential: {}", hex::encode(&alice_cred));
 
     // Create signature keypairs and store them in the state
-    let alice_id = mls_platform_api::mls_generate_signature_keypair(
-        &mut state_global,
-        group_config.ciphersuite,
-    )?;
+    let alice_id =
+        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
 
     println!("\nAlice identifier: {}", hex::encode(&alice_id));
 
@@ -36,10 +34,10 @@ fn test_group_create() -> Result<(), PlatformError> {
     let gid = mls_platform_api::mls_group_create(
         &mut state_global,
         &alice_id,
-        alice_cred,
+        &alice_cred,
         None,
         None,
-        Default::default(),
+        &Default::default(),
     )?;
 
     println!("\nGroup created by Alice: {}", hex::encode(&gid));
