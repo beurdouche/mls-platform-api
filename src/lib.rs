@@ -157,9 +157,9 @@ pub struct MlsGroupEpoch {
 ///
 /// Generate a credential.
 ///
-pub fn mls_generate_credential_basic(name: &str) -> Result<Credential, PlatformError> {
+pub fn mls_generate_credential_basic(content: &[u8]) -> Result<Credential, PlatformError> {
     let credential =
-        mls_rs::identity::basic::BasicCredential::new(name.as_bytes().to_vec()).into_credential();
+        mls_rs::identity::basic::BasicCredential::new(content.to_vec()).into_credential();
     let credential_bytes = credential.mls_encode_to_vec()?;
     Ok(credential_bytes)
 }

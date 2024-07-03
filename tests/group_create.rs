@@ -20,7 +20,7 @@ fn test_group_create() -> Result<(), PlatformError> {
     let mut state_global = mls_platform_api::state_access("global.db", &[0u8; 32])?;
 
     // Credentials
-    let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
+    let alice_cred = mls_platform_api::mls_generate_credential_basic("alice".as_bytes())?;
 
     println!("\nAlice credential: {}", hex::encode(&alice_cred));
 

@@ -57,10 +57,10 @@ fn main() -> Result<(), PlatformError> {
     let mut state_global = mls_platform_api::state_access("global.db", &[0u8; 32])?;
 
     // Credentials
-    let alice_cred = mls_platform_api::mls_generate_credential_basic("alice")?;
-    let bob_cred = mls_platform_api::mls_generate_credential_basic("bob")?;
-    let charlie_cred = mls_platform_api::mls_generate_credential_basic("charlie")?;
-    let diana_cred = mls_platform_api::mls_generate_credential_basic("diana")?;
+    let alice_cred = mls_platform_api::mls_generate_credential_basic("alice".as_bytes())?;
+    let bob_cred = mls_platform_api::mls_generate_credential_basic("bob".as_bytes())?;
+    let charlie_cred = mls_platform_api::mls_generate_credential_basic("charlie".as_bytes())?;
+    let diana_cred = mls_platform_api::mls_generate_credential_basic("diana".as_bytes())?;
 
     println!("\nAlice credential: {}", hex::encode(&alice_cred));
     println!("Bob credential: {}", hex::encode(&bob_cred));
