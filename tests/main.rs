@@ -6,8 +6,6 @@ use mls_platform_api::ClientConfig;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use serde_json::from_slice;
-
 //
 // Scenario
 //
@@ -115,18 +113,14 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, before adding bob): {members_str:?}");
+    println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output_bytes =
+    let commit_output =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
-
-    let commit_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let welcome = commit_output
         .welcome
@@ -144,8 +138,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, after adding bob): {members_str:?}");
+    println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
@@ -153,8 +146,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after joining the group): {members_str:?}");
+    println!("Members (bob, after joining the group): {members:?}");
 
     //
     // Bob sends message to alice
@@ -170,18 +162,15 @@ fn main() -> Result<(), PlatformError> {
     )?;
     println!(
         "\nAlice receives the message from Bob {:?}",
-        String::from_utf8(message).unwrap()
+        String::from_utf8(message.application_message.expect("Test: cannot fail!")).unwrap()
     );
 
     //
     // Bob adds Charlie
     //
     println!("\nBob adds Charlie to the Group");
-    let commit_output_2_bytes =
+    let commit_2_output =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &bob_id, vec![charlie_kp])?;
-
-    let commit_2_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_2_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let commit_2 = commit_2_output.commit;
     let welcome_2 = commit_2_output
@@ -200,8 +189,7 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after adding charlie): {members_str:?}");
+    println!("Members (bob, after adding charlie): {members:?}");
 
     // Alice receives the commit
     println!("\nAlice receives the commit from Bob to add Charlie");
@@ -217,18 +205,14 @@ fn main() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (charlie, after joining the group): {members_str:?}");
+    println!("Members (charlie, after joining the group): {members:?}");
 
     //
     // Charlie removes Alice from the group
     //
     println!("\nCharlie removes Alice from the Group");
-    let commit_output_3_bytes =
+    let commit_3_output =
         mls_platform_api::mls_group_remove(&state_global, &gid, &charlie_id, &alice_id)?;
-
-    let commit_3_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_3_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let commit_3 = commit_3_output.commit;
 
@@ -240,8 +224,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (charlie, after removing alice): {members_str:?}");
+    println!("Members (charlie, after removing alice): {members:?}");
 
     // Alice receives the commit from Charlie
     println!("\nAlice receives the remove commit from Charlie");
@@ -250,7 +233,7 @@ fn main() -> Result<(), PlatformError> {
         &alice_id,
         &MlsMessageOrAck::MlsMessage(commit_3.clone()),
     )?;
-    println!("Members (alice, after receiving alice's removal the group): {members_str:?}");
+    println!("Members (alice, after receiving alice's removal the group): {members:?}");
     println!("Alice's state for the group has been removed");
 
     // Bob receives the commit from Charlie
@@ -262,8 +245,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after receiving alice's removal the group): {members_str:?}");
+    println!("Members (bob, after receiving alice's removal the group): {members:?}");
 
     //
     // Bob produces group info to allow an external join from Diana
@@ -284,8 +266,6 @@ fn main() -> Result<(), PlatformError> {
         &client_config,
     )?;
 
-    let commit_4_output: mls_platform_api::MlsCommitOutput = from_slice(&commit_4_output).unwrap();
-
     // Bob receives own commit
     mls_platform_api::mls_receive(
         &state_global,
@@ -294,8 +274,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after commit allowing external join): {members_str:?}");
+    println!("Members (bob, after commit allowing external join): {members:?}");
 
     // Charlie receives Bob's commit with GroupInfo for External Join
     mls_platform_api::mls_receive(
@@ -305,14 +284,13 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (charlie, after bob's commit allowing external join): {members_str:?}");
+    println!("Members (charlie, after bob's commit allowing external join): {members:?}");
 
     //
     // Diana joins the group with an external commit
     //
     println!("\nDiana uses the group info created by Bob to do an External join");
-    let external_commit_output_bytes = mls_platform_api::mls_group_external_commit(
+    let external_commit_output = mls_platform_api::mls_group_external_commit(
         &state_global,
         &diana_id,
         &diana_cred,
@@ -323,14 +301,10 @@ fn main() -> Result<(), PlatformError> {
         None,
     )?;
 
-    let external_commit_output: mls_platform_api::MlsExternalCommitOutput =
-        serde_json::from_slice(&external_commit_output_bytes).unwrap();
-
     println!("Externally joined group {:?}", &external_commit_output.gid);
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (diane, after joining): {members_str:?}");
+    println!("Members (diane, after joining): {members:?}");
 
     //
     // Diana sends a message to the group
@@ -347,8 +321,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after diane joined externally): {members_str:?}");
+    println!("Members (bob, after diane joined externally): {members:?}");
 
     // Bob receives Diana's application message
     let ptx = mls_platform_api::mls_receive(
@@ -359,7 +332,7 @@ fn main() -> Result<(), PlatformError> {
 
     println!(
         "\nBob receives Diana's message {:?}",
-        String::from_utf8(ptx).unwrap()
+        String::from_utf8(ptx.application_message.expect("Test: cannot fail!")).unwrap()
     );
 
     // Charlie receives Diana's commit
@@ -371,8 +344,7 @@ fn main() -> Result<(), PlatformError> {
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (charlie, after diane joined externally): {members_str:?}");
+    println!("Members (charlie, after diane joined externally): {members:?}");
 
     // Charlie receives Diana's application message
     let ptx = mls_platform_api::mls_receive(
@@ -383,7 +355,7 @@ fn main() -> Result<(), PlatformError> {
 
     println!(
         "\nCharlie receives Diana's message {:?}",
-        String::from_utf8(ptx).unwrap()
+        String::from_utf8(ptx.application_message.expect("Test: cannot fail!")).unwrap()
     );
 
     //
@@ -396,24 +368,20 @@ fn main() -> Result<(), PlatformError> {
     // Diana receives the proposal from Bob
     //
     println!("\nDiana commits to the remove");
-    let commit_5_output_bytes = mls_platform_api::mls_receive(
+    let commit_5_output = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
         &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let commit_5_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
-
-    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
+    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit_output.unwrap().commit);
 
     // Diana processes the remove commit
     println!("\nDiana processes the remove commit");
     mls_platform_api::mls_receive(&state_global, &diana_id, &commit_5_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (diana, after removing bob): {members_str:?}");
+    println!("Members (diana, after removing bob): {members:?}");
 
     // Charlie processes the remove commit
     println!("\nCharlie processes the remove commit");
@@ -425,16 +393,13 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_5_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (charlie, after removing bob): {members_str:?}");
+    println!("Members (charlie, after removing bob): {members:?}");
 
     // Bob processes the remove commit
     println!("\nBob processes the remove commit");
     let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
-    let out_commit_5_bob_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_5_bob)?;
 
-    println!("Bob, out_commit_5 {out_commit_5_bob_str:?}");
+    println!("Bob, out_commit_5 {out_commit_5_bob:?}");
     println!("Bob's state for the group has been removed");
 
     // Note: Bob cannot look at its own group state because it was already removed
@@ -449,19 +414,14 @@ fn main() -> Result<(), PlatformError> {
     let commit_output_6_bytes =
         mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
 
-    let commit_6_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_6_bytes).expect("Failed to deserialize MlsCommitOutput");
-
-    let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_6_output.commit);
+    let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_output_6_bytes.commit);
 
     // Diana processes the close commit
     println!("\nDiana processes the close commit");
     let out_commit_6_diana =
         mls_platform_api::mls_receive(&state_global, &diana_id, &commit_6_msg)?;
-    let out_commit_6_diana_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&out_commit_6_diana)?;
 
-    println!("Diana, out_commit_6 {out_commit_6_diana_str:?}");
+    println!("Diana, out_commit_6 {out_commit_6_diana:?}");
     println!("Diana's state for the group has been removed");
     // Note: Diana cannot look at its own group state because it was already removed
 
@@ -470,15 +430,13 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_6_msg)?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (charlie, after processing their group_close commit): {members_str:?}");
+    println!("Members (charlie, after processing their group_close commit): {members:?}");
 
     // Charlie deletes her state for the group
     println!("\nCharlie deletes her state");
     let out = mls_platform_api::state_delete_group(&state_global, &gid, &charlie_id)?;
-    let out_str = mls_platform_api::utils_json_bytes_to_string_custom(&out)?;
 
-    println!("Charlie, group deletion confirmation {out_str:?}");
+    println!("Charlie, group deletion confirmation {out:?}");
 
     Ok(())
 }

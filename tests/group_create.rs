@@ -44,8 +44,7 @@ fn test_group_create() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, empty group): {members_str:?}");
+    println!("Members (alice, empty group): {members:?}");
 
     Ok(())
 }

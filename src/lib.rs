@@ -58,6 +58,8 @@ pub enum PlatformError {
     UnsupportedCiphersuite,
     #[error("UnsupportedGroupConfig")]
     UnsupportedGroupConfig,
+    #[error("UnsupportedMessage")]
+    UnsupportedMessage,
     #[error("UndefinedIdentity")]
     UndefinedIdentity,
     #[error("StorageError")]
@@ -97,19 +99,14 @@ pub fn state_delete_group(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<Vec<u8>, PlatformError> {
+) -> Result<MlsGroupEpoch, PlatformError> {
     state.delete_group(gid, myself)?;
 
     // Return the group id and 0xFF..FF epoch to signal the group is closed
-    let result = MlsGroupEpoch {
+    Ok(MlsGroupEpoch {
         group_id: gid.to_vec(),
         epoch: 0xFFFFFFFFFFFFFFFF,
-    };
-
-    // Encode the message as Json Bytes
-    let json_string =
-        serde_json::to_string(&result).map_err(|_| PlatformError::JsonConversionError)?;
-    Ok(json_string.as_bytes().to_vec())
+    })
 }
 
 ///
@@ -231,15 +228,13 @@ pub struct MlsGroupMembers {
     // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
-pub type MlsGroupMembersJsonBytes = Vec<u8>;
-
 // Note: The identity is needed because it is allowed to have multiple
 //       identities in a group.
 pub fn mls_group_members(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<MlsGroupMembersJsonBytes, PlatformError> {
+) -> Result<MlsGroupMembers, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     let group = state.client_default(myself)?.load_group(gid)?;
@@ -269,12 +264,7 @@ pub fn mls_group_members(
         identities,
     };
 
-    // Encode the message as Json Bytes
-    let members_json_string =
-        serde_json::to_string(&members).map_err(|_| PlatformError::JsonConversionError)?;
-    let members_json_bytes = members_json_string.as_bytes().to_vec();
-
-    Ok(members_json_bytes)
+    Ok(members)
 }
 
 ///
@@ -439,14 +429,12 @@ impl<'de> Deserialize<'de> for MlsCommitOutput {
     }
 }
 
-pub type MlsCommitOutputJsonBytes = Vec<u8>;
-
 pub fn mls_group_add(
     pstate: &mut PlatformState,
     gid: &GroupId,
     myself: &Identity,
     new_members: Vec<MlsMessage>,
-) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
+) -> Result<MlsCommitOutput, PlatformError> {
     // Get the group from the state
     let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
@@ -472,12 +460,7 @@ pub fn mls_group_add(
     // Write the group to the storage
     group.write_to_storage()?;
 
-    // Encode the message as Json Bytes
-    let js_string =
-        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
-    let js_bytes = js_string.as_bytes().to_vec();
-
-    Ok(js_bytes)
+    Ok(commit_output)
 }
 
 pub fn mls_group_propose_add(
@@ -507,7 +490,7 @@ pub fn mls_group_remove(
     gid: &GroupId,
     myself: &Identity,
     removed: &Identity, // TODO: Make this Vec<Identities>?
-) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
+) -> Result<MlsCommitOutput, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let crypto_provider = DefaultCryptoProvider::default();
@@ -544,12 +527,7 @@ pub fn mls_group_remove(
         identity: None,
     };
 
-    // Encode the message as Json Bytes
-    let json_string =
-        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
-    let json_bytes = json_string.as_bytes().to_vec();
-
-    Ok(json_bytes)
+    Ok(commit_output)
 }
 
 pub fn mls_group_propose_remove(
@@ -598,7 +576,7 @@ pub fn mls_group_update(
     credential: Option<&Credential>,
     group_context_extensions: Option<ExtensionList>,
     config: &ClientConfig,
-) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
+) -> Result<MlsCommitOutput, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     // Propose + Commit
@@ -655,35 +633,8 @@ pub fn mls_group_update(
     // Return the signing Identity
     // Hash the signingIdentity to get the Identifier
 
-    // Encode the message as Json Bytes
-    let json_string =
-        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
-    let json_bytes = json_string.as_bytes().to_vec();
-
-    Ok(json_bytes)
+    Ok(commit_output)
 }
-
-// pub fn mls_group_propose_update(
-//     _pstate: &mut PlatformState,
-//     _gid: GroupId,
-//     _myself: &Identity,
-//     _signature_key: Option<Vec<u8>>,
-//     // Below is client config
-//     _group_context_extensions: Option<ExtensionList>,
-//     _leaf_node_extensions: Option<ExtensionList>,
-//     _leaf_node_capabilities: Option<Capabilities>,
-//     _lifetime: Option<u64>,
-// ) -> Result<MlsMessage, PlatformError> {
-//     unimplemented!()
-// }
-
-///
-/// TODO: Pending commit API
-///
-
-// List pending
-// Apply pending
-// Discard pending
 
 ///
 /// Process Welcome message.
@@ -715,7 +666,7 @@ pub fn mls_group_close(
     pstate: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<MlsCommitOutputJsonBytes, PlatformError> {
+) -> Result<MlsCommitOutput, PlatformError> {
     // Remove everyone from the group.
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
     let self_index = group.current_member_index();
@@ -747,30 +698,33 @@ pub fn mls_group_close(
     // Write the group to the storage
     group.write_to_storage()?;
 
-    // Encode the message as Json Bytes
-    let js_string =
-        serde_json::to_string(&commit_output).map_err(|_| PlatformError::JsonConversionError)?;
-    let js_bytes = js_string.as_bytes().to_vec();
-
-    Ok(js_bytes)
+    Ok(commit_output)
 }
 
 ///
 /// Receive a message
 ///
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct MlsReceived {
+    pub rtype: String,
+    pub group_epoch: Option<MlsGroupEpoch>,
+    pub commit_output: Option<MlsCommitOutput>,
+    pub application_message: Option<Vec<u8>>,
+}
+
 pub fn mls_receive(
     pstate: &PlatformState,
     myself: &Identity,
     message_or_ack: &MlsMessageOrAck,
-) -> Result<Vec<u8>, PlatformError> {
+) -> Result<MlsReceived, PlatformError> {
     // Extract the gid from the Message
     let gid = match &message_or_ack {
         MlsMessageOrAck::Ack(gid) => gid,
         MlsMessageOrAck::MlsMessage(message) => match message.group_id() {
             Some(gid) => gid,
             // TODO this could be an error as well
-            None => return Ok(b"Key package or welcome message".to_vec()),
+            None => return Err(PlatformError::UnsupportedMessage),
         },
     };
 
@@ -783,9 +737,12 @@ pub fn mls_receive(
 
     //
     let result = match received_message? {
-        ReceivedMessage::ApplicationMessage(app_data_description) => {
-            app_data_description.data().to_vec()
-        }
+        ReceivedMessage::ApplicationMessage(app_data_description) => Ok(MlsReceived {
+            rtype: "application_message".to_string(),
+            application_message: Some(app_data_description.data().to_vec()),
+            group_epoch: None,
+            commit_output: None,
+        }),
         ReceivedMessage::Proposal(_proposal) => {
             // TODO: We inconditionally return the commit for the received proposal
             let commit = group.commit(vec![])?;
@@ -802,11 +759,12 @@ pub fn mls_receive(
                     .transpose()?,
                 identity: None,
             };
-
-            // Encode the message as Json Bytes
-            let json_string = serde_json::to_string(&commit_output)
-                .map_err(|_| PlatformError::JsonConversionError)?;
-            json_string.as_bytes().to_vec()
+            Ok(MlsReceived {
+                rtype: "commit_output".to_string(),
+                application_message: None,
+                group_epoch: None,
+                commit_output: Some(commit_output),
+            })
         }
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
@@ -815,34 +773,40 @@ pub fn mls_receive(
                 pstate.delete_group(gid, myself)?;
 
                 // Return the group id and 0xFF..FF epoch to signal the group is closed
-                let result = MlsGroupEpoch {
+                let group_epoch = MlsGroupEpoch {
                     group_id: group.group_id().to_vec(),
                     epoch: 0xFFFFFFFFFFFFFFFF,
                 };
 
-                // Encode the message as Json Bytes
-                let json_string = serde_json::to_string(&result)
-                    .map_err(|_| PlatformError::JsonConversionError)?;
-                return Ok(json_string.as_bytes().to_vec());
+                Ok(MlsReceived {
+                    rtype: "group_epoch".to_string(),
+                    application_message: None,
+                    group_epoch: Some(group_epoch),
+                    commit_output: None,
+                })
             } else {
                 // TODO: Receiving a group_close commit means the sender receiving
                 // is left alone in the group. We should be able delete group automatically.
                 // As of now, the user calling group_close has to delete group manually.
 
                 // If this is a normal commit, return the affected group and new epoch
-                let result = MlsGroupEpoch {
+                let group_epoch = MlsGroupEpoch {
                     group_id: group.group_id().to_vec(),
                     epoch: group.current_epoch(),
                 };
 
-                // Encode the message as Json Bytes
-                let json_string = serde_json::to_string(&result)
-                    .map_err(|_| PlatformError::JsonConversionError)?;
-                json_string.as_bytes().to_vec()
+                Ok(MlsReceived {
+                    rtype: "group_epoch".to_string(),
+                    application_message: None,
+                    group_epoch: Some(group_epoch),
+                    commit_output: None,
+                })
             }
         }
-        _ => "Unsupported Message".as_bytes().to_vec(),
-    };
+        // TODO: We could make this more user friendly by allowing to
+        // pass a Welcome message. KeyPackages should be rejected.
+        _ => Err(PlatformError::UnsupportedMessage),
+    }?;
 
     // Write the state to storage
     group.write_to_storage()?;
@@ -910,14 +874,12 @@ pub fn mls_send_custom_proposal(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsExporterOutput {
-    group_id: GroupId,
-    epoch: u64,
-    label: Vec<u8>,
-    context: Vec<u8>,
-    exporter: Vec<u8>,
+    pub group_id: GroupId,
+    pub epoch: u64,
+    pub label: Vec<u8>,
+    pub context: Vec<u8>,
+    pub exporter: Vec<u8>,
 }
-
-pub type MlsExporterOutputJsonBytes = Vec<u8>;
 
 pub fn mls_derive_exporter(
     pstate: &PlatformState,
@@ -926,7 +888,7 @@ pub fn mls_derive_exporter(
     label: &[u8],
     context: &[u8],
     len: u64,
-) -> Result<MlsExporterOutputJsonBytes, PlatformError> {
+) -> Result<MlsExporterOutput, PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
     let secret = group
         .export_secret(label, context, len.try_into().unwrap())?
@@ -941,12 +903,7 @@ pub fn mls_derive_exporter(
         exporter: secret,
     };
 
-    // Encode the value as Json Bytes
-    let json_string = serde_json::to_string(&epoch_and_exporter)
-        .map_err(|_| PlatformError::JsonConversionError)?;
-    let json_bytes = json_string.as_bytes().to_vec();
-
-    Ok(json_bytes)
+    Ok(epoch_and_exporter)
 }
 
 ///
@@ -1031,15 +988,13 @@ impl<'de> Deserialize<'de> for MlsExternalCommitOutput {
     }
 }
 
-pub type MlsExternalCommitOutputJsonBytes = Vec<u8>;
-
 pub fn mls_group_external_commit(
     pstate: &PlatformState,
     myself: &Identity,
     credential: &Credential,
     group_info: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
-) -> Result<MlsExternalCommitOutputJsonBytes, PlatformError> {
+) -> Result<MlsExternalCommitOutput, PlatformError> {
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
     let client = pstate.client(
@@ -1067,12 +1022,7 @@ pub fn mls_group_external_commit(
         external_commit,
     };
 
-    let json_string =
-        serde_json::to_string(&gid_and_message).map_err(|_| PlatformError::JsonConversionError)?;
-
-    let json_bytes = json_string.as_bytes().to_vec();
-
-    Ok(json_bytes)
+    Ok(gid_and_message)
 }
 
 ///

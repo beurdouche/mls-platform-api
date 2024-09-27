@@ -4,8 +4,6 @@
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use serde_json::from_slice;
-
 //
 // Scenario
 //
@@ -64,18 +62,14 @@ fn test_group_join() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, before adding bob): {members_str:?}");
+    println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output_bytes =
+    let commit_output =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
-
-    let commit_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let welcome = commit_output
         .welcome
@@ -93,8 +87,7 @@ fn test_group_join() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, after adding bob): {members_str:?}");
+    println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
@@ -102,8 +95,7 @@ fn test_group_join() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members_2 = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_2_str = mls_platform_api::utils_json_bytes_to_string_custom(&members_2)?;
-    println!("Members (bob, after joining the group): {members_2_str:?}");
+    println!("Members (bob, after joining the group): {members_2:?}");
 
     // Assert that the group identifier is the same for Alice and Bob
     assert!(gid == gid_2);

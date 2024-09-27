@@ -163,3 +163,25 @@ pub fn mls_create_client_config(
 ) -> Result<ClientConfig, MlsError> {
     unimplemented!()
 }
+
+// pub fn mls_group_propose_update(
+//     _pstate: &mut PlatformState,
+//     _gid: GroupId,
+//     _myself: &Identity,
+//     _signature_key: Option<Vec<u8>>,
+//     // Below is client config
+//     _group_context_extensions: Option<ExtensionList>,
+//     _leaf_node_extensions: Option<ExtensionList>,
+//     _leaf_node_capabilities: Option<Capabilities>,
+//     _lifetime: Option<u64>,
+// ) -> Result<MlsMessage, PlatformError> {
+//     unimplemented!()
+// }
+
+///
+/// TODO: Pending commit API
+///
+
+// List pending
+// Apply pending
+// Discard pending

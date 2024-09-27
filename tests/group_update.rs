@@ -5,8 +5,6 @@ use mls_platform_api::ClientConfig;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use serde_json::from_slice;
-
 //
 // Scenario
 //
@@ -79,18 +77,14 @@ fn test_group_external_join() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, before adding bob): {members_str:?}");
+    println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output_bytes =
+    let commit_output =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
-
-    let commit_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let welcome = commit_output
         .welcome
@@ -108,8 +102,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, after adding bob): {members_str:?}");
+    println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
@@ -117,8 +110,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after joining the group): {members_str:?}");
+    println!("Members (bob, after joining the group): {members:?}");
 
     //
     // Bob produces group info to allow an external join from Diana
@@ -139,8 +131,6 @@ fn test_group_external_join() -> Result<(), PlatformError> {
         &client_config,
     )?;
 
-    let commit_4_output: mls_platform_api::MlsCommitOutput = from_slice(&commit_4_output).unwrap();
-
     // Alice receives Bob's commit
     mls_platform_api::mls_receive(
         &state_global,
@@ -148,11 +138,9 @@ fn test_group_external_join() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
     )?;
 
-    let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_alice_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
+    let members_alice = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
     println!(
-        "Members (alice, after receiving the commit allowing external join): {members_alice_str:?}"
+        "Members (alice, after receiving the commit allowing external join): {members_alice:?}"
     );
 
     // Bob receives own commit
@@ -162,15 +150,14 @@ fn test_group_external_join() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
     )?;
 
-    let members_bob_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_bob_str = mls_platform_api::utils_json_bytes_to_string_custom(&members_bob_bytes)?;
-    println!("Members (bob, after commit allowing external join): {members_bob_str:?}");
+    let members_bob = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    println!("Members (bob, after commit allowing external join): {members_bob:?}");
 
     //
     // Diana joins the group with an external commit
     //
     println!("\nDiana uses the group info created by Bob to do an External join");
-    let external_commit_output_bytes = mls_platform_api::mls_group_external_commit(
+    let external_commit_output = mls_platform_api::mls_group_external_commit(
         &state_global,
         &diana_id,
         &diana_cred,
@@ -181,15 +168,10 @@ fn test_group_external_join() -> Result<(), PlatformError> {
         None,
     )?;
 
-    let external_commit_output: mls_platform_api::MlsExternalCommitOutput =
-        serde_json::from_slice(&external_commit_output_bytes).unwrap();
-
     println!("Externally joined group {:?}", &external_commit_output.gid);
 
-    let members_diana_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
-    let members_diana_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&members_diana_bytes)?;
-    println!("Members (diane, after joining): {members_diana_str:?}");
+    let members_diana = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
+    println!("Members (diane, after joining): {members_diana:?}");
 
     // Alice receives Diana's commit
     println!("\nAlice receives the External Join from Diana");
@@ -199,10 +181,8 @@ fn test_group_external_join() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
-    let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_alice_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
-    println!("Members (alice, after receiving the commit from Diana): {members_alice_str:?}");
+    let members_alice = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    println!("Members (alice, after receiving the commit from Diana): {members_alice:?}");
 
     // Bob receives Diana's commit
     println!("\nBob receives the External Join from Diana");
@@ -212,16 +192,11 @@ fn test_group_external_join() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
-    let members_bob_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_bob_str = mls_platform_api::utils_json_bytes_to_string_custom(&members_bob_bytes)?;
-    println!("Members (bob, after receiving the commit from Diana): {members_bob_str:?}");
-
-    // Parse the members list from JSON
-    let members_diana_json: mls_platform_api::MlsGroupMembers =
-        serde_json::from_slice(&members_diana_bytes).expect("Failed to parse members");
+    let members_bob = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    println!("Members (bob, after receiving the commit from Diana): {members_bob:?}");
 
     // Check if Diana is in the members list
-    let diana_present = members_diana_json
+    let diana_present = members_diana
         .identities
         .iter()
         .any(|(id, _)| id == &diana_id);
@@ -233,8 +208,8 @@ fn test_group_external_join() -> Result<(), PlatformError> {
     );
 
     // Test that membership are all the same
-    assert!(members_alice_bytes == members_bob_bytes);
-    assert!(members_diana_bytes == members_bob_bytes);
+    assert!(members_alice == members_bob);
+    assert!(members_diana == members_bob);
 
     Ok(())
 }

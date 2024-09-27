@@ -4,8 +4,6 @@
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use serde_json::from_slice;
-
 //
 // Scenario
 //
@@ -84,18 +82,14 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, before adding bob): {members_str:?}");
+    println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output_bytes =
+    let commit_output =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
-
-    let commit_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let welcome = commit_output
         .welcome
@@ -113,8 +107,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, after adding bob): {members_str:?}");
+    println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
     println!("\nBob joins the group created by Alice");
@@ -122,8 +115,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (bob, after joining the group): {members_str:?}");
+    println!("Members (bob, after joining the group): {members:?}");
 
     //
     // Bob propose to add Charlie
@@ -140,44 +132,47 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // Alice receives the Add proposal and commits to it
     println!("\nAlice commits to the add");
-    let commit_5_output_bytes = mls_platform_api::mls_receive(
+    let commit_5_output = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
         &MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
-
-    let commit_5_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_5_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     // Bobs process the commit
     println!("\nBob receives the commit");
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_5_output.commit.clone()),
+        &MlsMessageOrAck::MlsMessage(
+            commit_5_output
+                .commit_output
+                .clone()
+                .unwrap()
+                .commit
+                .clone(),
+        ),
     )?;
 
     // List the members of the group
-    let members_bob_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
-    let members_bob_str = mls_platform_api::utils_json_bytes_to_string_custom(&members_bob_bytes)?;
-    println!("Members (bob, after adding charlie): {members_bob_str:?}");
+    let members_bob = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    println!("Members (bob, after adding charlie): {members_bob:?}");
 
     // Alice receives the commit
     println!("\nAlice receives the commit");
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_5_output.commit),
+        &MlsMessageOrAck::MlsMessage(commit_5_output.commit_output.clone().unwrap().commit),
     )?;
 
     // List the members of the group
-    let members_alice_bytes = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_alice_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&members_alice_bytes)?;
-    println!("Members (alice, after adding charlie): {members_alice_str:?}");
+    let members_alice = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    println!("Members (alice, after adding charlie): {members_alice:?}");
 
     // Extract the welcome from the commit output
     let welcome_5 = commit_5_output
+        .commit_output
+        .expect("Test: cannot fail!")
         .welcome
         .first()
         .expect("No welcome messages found")
@@ -188,15 +183,12 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_join(&state_global, &charlie_id, &welcome_5, None)?;
 
     // List the members of the group
-    let members_charlie_bytes =
-        mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
-    let members_charlie_str =
-        mls_platform_api::utils_json_bytes_to_string_custom(&members_charlie_bytes)?;
-    println!("Members (charlie, after joining the group): {members_charlie_str:?}");
+    let members_charlie = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    println!("Members (charlie, after joining the group): {members_charlie:?}");
 
     // Test that Alice, Bob and Charlie are in the same group
-    assert!(members_alice_bytes == members_bob_bytes);
-    assert!(members_bob_bytes == members_charlie_bytes);
+    assert!(members_alice == members_bob);
+    assert!(members_bob == members_charlie);
 
     Ok(())
 }

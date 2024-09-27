@@ -29,14 +29,6 @@ use mls_rs_provider_sqlite::{
 
 use crate::{Identity, PlatformError};
 
-// Dependencies for implementation of TemporaryState
-
-// use crate::GroupConfig;
-// use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
-// use mls_rs::{GroupStateStorage, KeyPackageStorage};
-// use mls_rs_core::group::{EpochRecord, GroupState};
-// use std::{collections::hash_map::Entry, convert::Infallible};
-
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GroupData {
     state_data: Vec<u8>,
@@ -256,7 +248,15 @@ impl PlatformState {
     }
 }
 
-// impl TemporaryState {
+// Dependencies for implementation of InMemoryState
+
+// use crate::GroupConfig;
+// use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
+// use mls_rs::{GroupStateStorage, KeyPackageStorage};
+// use mls_rs_core::group::{EpochRecord, GroupState};
+// use std::{collections::hash_map::Entry, convert::Infallible};
+
+// impl InMemoryState {
 //     pub fn new() -> Self {
 //         Default::default()
 //     }

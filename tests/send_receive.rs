@@ -4,8 +4,6 @@
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
-use serde_json::from_slice;
-
 //
 // Scenario
 //
@@ -66,18 +64,14 @@ fn test_send_receive() -> Result<(), PlatformError> {
 
     // List the members of the group
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
-    let members_str = mls_platform_api::utils_json_bytes_to_string_custom(&members)?;
-    println!("Members (alice, before adding bob): {members_str:?}");
+    println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output_bytes =
+    let commit_output =
         mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
-
-    let commit_output: mls_platform_api::MlsCommitOutput =
-        from_slice(&commit_output_bytes).expect("Failed to deserialize MlsCommitOutput");
 
     let welcome = commit_output
         .welcome
@@ -112,7 +106,13 @@ fn test_send_receive() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
 
-    let message_2_str = String::from_utf8(message.clone()).unwrap();
+    let message_2_str = String::from_utf8(
+        message
+            .application_message
+            .expect("Test: cannot fail!")
+            .clone(),
+    )
+    .unwrap();
     println!("\nAlice receives the message from Bob {:?}", message_2_str);
 
     assert!(message_str == message_2_str);
