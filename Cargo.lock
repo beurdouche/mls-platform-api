@@ -24,6 +24,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
+
+[[package]]
 name = "async-trait"
 version = "0.1.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -504,13 +510,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
  "ahash",
+ "allocator-api2",
 ]
 
 [[package]]
 name = "hashlink"
-version = "0.9.1"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
+checksum = "e8094feaf31ff591f651a2664fb9cfd92bba7a60ce3197265e9482ebe753c8f7"
 dependencies = [
  "hashbrown",
 ]
@@ -611,9 +618,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.28.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c10584274047cb335c23d3e61bcef8e323adae7c5c8c760540f73610177fc3f"
+checksum = "cf4e226dcd58b4be396f7bd3c20da8fdee2911400705297ba7d2d7cc2c30f716"
 dependencies = [
  "cc",
  "pkg-config",
@@ -667,7 +674,7 @@ dependencies = [
 [[package]]
 name = "mls-rs"
 version = "0.39.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -692,7 +699,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec"
 version = "0.5.3"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "mls-rs-codec-derive",
  "thiserror",
@@ -702,7 +709,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-codec-derive"
 version = "0.1.1"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -713,7 +720,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-core"
 version = "0.18.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "hex",
@@ -729,7 +736,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-hpke"
 version = "0.9.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -743,7 +750,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-nss"
 version = "0.1.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -763,7 +770,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-crypto-traits"
 version = "0.10.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -773,7 +780,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-identity-x509"
 version = "0.11.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "maybe-async",
@@ -785,7 +792,7 @@ dependencies = [
 [[package]]
 name = "mls-rs-provider-sqlite"
 version = "0.11.0"
-source = "git+https://github.com/beurdouche/mls-rs?rev=5ebbfc9740be1e3de08bf6cace84fef7148bf512#5ebbfc9740be1e3de08bf6cace84fef7148bf512"
+source = "git+https://github.com/beurdouche/mls-rs?rev=d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026#d1cabda41d2c0e3cefdbcd6ee1d20a383dcf9026"
 dependencies = [
  "async-trait",
  "hex",
@@ -1022,9 +1029,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.31.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b838eba278d213a8beaf485bd313fd580ca4505a00d5871caeb1457c55322cae"
+checksum = "a78046161564f5e7cd9008aff3b2990b3850dc8e0349119b98e8f251e099f24d"
 dependencies = [
  "bitflags",
  "fallible-iterator",
