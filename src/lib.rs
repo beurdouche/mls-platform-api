@@ -147,8 +147,8 @@ impl Default for GroupConfig {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsGroupEpoch {
-    group_id: GroupId,
-    epoch: u64,
+    pub group_id: GroupId,
+    pub epoch: u64,
 }
 
 ///
