@@ -221,10 +221,16 @@ pub fn mls_generate_key_package(
 ///
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ClientIdentifiers {
+    pub identity: Identity,
+    pub credential: Credential,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsGroupMembers {
     pub group_id: GroupId,
     pub epoch: u64,
-    pub identities: Vec<(Identity, Credential)>,
+    pub members: Vec<ClientIdentifiers>,
     // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
@@ -245,23 +251,23 @@ pub fn mls_group_members(
         .ok_or(PlatformError::UnsupportedCiphersuite)?;
 
     // Return Vec<(Identity, Credential)>
-    let identities = group
+    let members = group
         .roster()
         .member_identities_iter()
         .map(|identity| {
-            Ok((
-                cipher_suite_provider
+            Ok(ClientIdentifiers {
+                identity: cipher_suite_provider
                     .hash(&identity.signature_key)
                     .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?,
-                identity.credential.mls_encode_to_vec()?,
-            ))
+                credential: identity.credential.mls_encode_to_vec()?,
+            })
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
     let members = MlsGroupMembers {
         group_id: gid.to_vec(),
         epoch,
-        identities,
+        members,
     };
 
     Ok(members)

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use mls_platform_api::mls_group_propose_remove;
+use mls_platform_api::ClientIdentifiers;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
@@ -223,7 +224,10 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     // Note: Bob cannot look at its own group state because it was already removed
 
     // Check if Bob is present in the group
-    let bob_present = members_alice.identities.iter().any(|(id, _)| id == &bob_id);
+    let bob_present = members_alice
+        .members
+        .iter()
+        .any(|ClientIdentifiers { identity, .. }| identity == &bob_id);
 
     // Test that bob was removed from the group
     assert!(

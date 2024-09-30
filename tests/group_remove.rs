@@ -1,6 +1,7 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
+use mls_platform_api::ClientIdentifiers;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
@@ -200,7 +201,10 @@ fn test_group_remove() -> Result<(), PlatformError> {
     println!("Members (bob, after receiving alice's removal the group): {members:?}");
 
     // Check if Alice is still in the members list
-    let alice_present = members.identities.iter().any(|(id, _)| id == &alice_id);
+    let alice_present = members
+        .members
+        .iter()
+        .any(|ClientIdentifiers { identity, .. }| identity == &alice_id);
 
     // Test that alice was removed from the group
     assert!(

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use mls_platform_api::ClientConfig;
+use mls_platform_api::ClientIdentifiers;
 use mls_platform_api::MlsMessageOrAck;
 use mls_platform_api::PlatformError;
 
@@ -197,9 +198,9 @@ fn test_group_external_join() -> Result<(), PlatformError> {
 
     // Check if Diana is in the members list
     let diana_present = members_diana
-        .identities
+        .members
         .iter()
-        .any(|(id, _)| id == &diana_id);
+        .any(|ClientIdentifiers { identity, .. }| identity == &diana_id);
 
     // Test that alice was removed from the group
     assert!(
