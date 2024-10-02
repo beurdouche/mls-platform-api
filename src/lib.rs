@@ -869,9 +869,9 @@ pub fn mls_send_custom_proposal(
 ///
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MlsExporterOutput {
+pub struct ExporterOutput {
     pub group_id: MlsGroupId,
-    pub epoch: u64,
+    pub epoch: MlsGroupEpoch,
     pub label: Vec<u8>,
     pub context: Vec<u8>,
     pub exporter: Vec<u8>,
@@ -884,14 +884,14 @@ pub fn mls_derive_exporter(
     label: &[u8],
     context: &[u8],
     len: u64,
-) -> Result<MlsExporterOutput, PlatformError> {
+) -> Result<ExporterOutput, PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
     let secret = group
         .export_secret(label, context, len.try_into().unwrap())?
         .to_vec();
 
     // Construct the output object
-    let epoch_and_exporter = MlsExporterOutput {
+    let epoch_and_exporter = ExporterOutput {
         group_id: gid.to_vec(),
         epoch: group.current_epoch(),
         label: label.to_vec(),
