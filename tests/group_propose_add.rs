@@ -1,9 +1,9 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
-use mls_platform_api::MlsMessageOrAck;
-use mls_platform_api::MlsReceived;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
+use mls_platform_api::Received;
 
 //
 // Scenario
@@ -103,7 +103,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -136,10 +136,10 @@ fn test_propose_add() -> Result<(), PlatformError> {
     let recv_commit_output_5 = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
+        &MessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
 
-    let MlsReceived::CommitOutput(commit_output_5) = recv_commit_output_5 else {
+    let Received::CommitOutput(commit_output_5) = recv_commit_output_5 else {
         panic!("Expected a different type.");
     };
 
@@ -148,7 +148,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_output_5.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output_5.commit.clone()),
     )?;
 
     // List the members of the group
@@ -160,7 +160,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output_5.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output_5.commit.clone()),
     )?;
 
     // List the members of the group

@@ -3,9 +3,9 @@
 
 use mls_platform_api::mls_group_propose_remove;
 use mls_platform_api::ClientIdentifiers;
-use mls_platform_api::MlsMessageOrAck;
-use mls_platform_api::MlsReceived;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
+use mls_platform_api::Received;
 
 //
 // Scenario
@@ -109,7 +109,7 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -143,7 +143,7 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_2.clone()),
+        &MessageOrAck::MlsMessage(commit_2.clone()),
     )?;
 
     // List the members of the group
@@ -155,7 +155,7 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_2),
+        &MessageOrAck::MlsMessage(commit_2),
     )?;
 
     // Charlie joins
@@ -179,21 +179,21 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     let recv_commit_output_5 = mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
+        &MessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let MlsReceived::CommitOutput(commit_output_5) = recv_commit_output_5 else {
+    let Received::CommitOutput(commit_output_5) = recv_commit_output_5 else {
         panic!("Expected a different type.");
     };
 
-    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_output_5.commit);
+    let commit_5_msg = MessageOrAck::MlsMessage(commit_output_5.commit);
 
     // Alice processes the remove commit
     println!("\nAlice processes the remove commit");
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
+        &MessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
     mls_platform_api::mls_receive(&state_global, &alice_id, &commit_5_msg)?;
 

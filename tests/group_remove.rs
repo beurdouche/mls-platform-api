@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use mls_platform_api::ClientIdentifiers;
-use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
 
 //
@@ -107,7 +107,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -137,7 +137,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_2.clone()),
+        &MessageOrAck::MlsMessage(commit_2.clone()),
     )?;
 
     // List the members of the group
@@ -149,7 +149,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_2),
+        &MessageOrAck::MlsMessage(commit_2),
     )?;
 
     // Charlie joins
@@ -170,11 +170,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
     let commit_3 = commit_3_output.commit;
 
     // Charlie receives the commit
-    mls_platform_api::mls_receive(
-        &state_global,
-        &charlie_id,
-        &MlsMessageOrAck::Ack(gid.to_vec()),
-    )?;
+    mls_platform_api::mls_receive(&state_global, &charlie_id, &MessageOrAck::Ack(gid.to_vec()))?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     println!("Members (charlie, after removing alice): {members:?}");
@@ -184,7 +180,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_3.clone()),
+        &MessageOrAck::MlsMessage(commit_3.clone()),
     )?;
     println!("Members (alice, after receiving alice's removal the group): {members:?}");
     println!("Alice's state for the group has been removed");
@@ -194,7 +190,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_3.clone()),
+        &MessageOrAck::MlsMessage(commit_3.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;

@@ -3,7 +3,7 @@
 
 use mls_platform_api::ClientConfig;
 use mls_platform_api::ClientIdentifiers;
-use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
 
 //
@@ -98,7 +98,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -136,7 +136,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_4_output.commit.clone()),
     )?;
 
     let members_alice = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
@@ -148,7 +148,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_4_output.commit.clone()),
     )?;
 
     let members_bob = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -179,7 +179,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
+        &MessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
     let members_alice = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
@@ -190,7 +190,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
+        &MessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
     let members_bob = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;

@@ -1,9 +1,9 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
-use mls_platform_api::MlsMessageOrAck;
-use mls_platform_api::MlsReceived;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
+use mls_platform_api::Received;
 
 //
 // Scenario
@@ -85,7 +85,7 @@ fn test_send_receive() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // Bob joins
@@ -104,10 +104,10 @@ fn test_send_receive() -> Result<(), PlatformError> {
     let message = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(ciphertext),
+        &MessageOrAck::MlsMessage(ciphertext),
     )?;
 
-    let MlsReceived::ApplicationMessage(app_msg) = message else {
+    let Received::ApplicationMessage(app_msg) = message else {
         panic!("Expected an application message, but received a different type.");
     };
 

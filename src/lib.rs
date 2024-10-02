@@ -26,16 +26,16 @@ pub use mls_rs::MlsMessage;
 pub use mls_rs::ProtocolVersion;
 
 // Define new types
-pub type GroupId = Vec<u8>;
+pub type MlsGroupId = Vec<u8>;
+pub type MlsGroupEpoch = u64;
+pub type MlsCredential = Vec<u8>;
 pub type GroupState = Vec<u8>;
 pub type Identity = Vec<u8>;
-pub type GroupEpoch = u64;
-pub type Credential = Vec<u8>;
 
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
-pub enum MlsMessageOrAck {
-    Ack(GroupId),
+pub enum MessageOrAck {
+    Ack(MlsGroupId),
     MlsMessage(MlsMessage),
 }
 
@@ -47,7 +47,7 @@ pub enum PlatformError {
     #[error("CoreError")]
     CoreError,
     #[error(transparent)]
-    MlsError(#[from] mls_rs::error::MlsError),
+    LibraryError(#[from] mls_rs::error::MlsError),
     #[error("InternalError")]
     InternalError,
     #[error("IdentityError")]
@@ -71,7 +71,7 @@ pub enum PlatformError {
     #[error("JsonConversionError")]
     JsonConversionError,
     #[error(transparent)]
-    MlsCodecError(#[from] mls_rs::mls_rs_codec::Error),
+    CodecError(#[from] mls_rs::mls_rs_codec::Error),
     #[error(transparent)]
     BincodeError(#[from] bincode::Error),
     #[error(transparent)]
@@ -97,13 +97,13 @@ pub fn state_delete(name: &str) -> Result<(), PlatformError> {
 ///
 pub fn state_delete_group(
     state: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
-) -> Result<MlsGroupIdEpoch, PlatformError> {
+) -> Result<GroupIdEpoch, PlatformError> {
     state.delete_group(gid, myself)?;
 
     // Return the group id and 0xFF..FF epoch to signal the group is closed
-    Ok(MlsGroupIdEpoch {
+    Ok(GroupIdEpoch {
         group_id: gid.to_vec(),
         group_epoch: 0xFFFFFFFFFFFFFFFF,
     })
@@ -146,15 +146,15 @@ impl Default for GroupConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MlsGroupIdEpoch {
-    pub group_id: GroupId,
-    pub group_epoch: u64,
+pub struct GroupIdEpoch {
+    pub group_id: MlsGroupId,
+    pub group_epoch: MlsGroupEpoch,
 }
 
 ///
 /// Generate a credential.
 ///
-pub fn mls_generate_credential_basic(content: &[u8]) -> Result<Credential, PlatformError> {
+pub fn mls_generate_credential_basic(content: &[u8]) -> Result<MlsCredential, PlatformError> {
     let credential =
         mls_rs::identity::basic::BasicCredential::new(content.to_vec()).into_credential();
     let credential_bytes = credential.mls_encode_to_vec()?;
@@ -199,7 +199,7 @@ pub fn mls_generate_signature_keypair(
 pub fn mls_generate_key_package(
     state: &PlatformState,
     myself: &Identity,
-    credential: &Credential,
+    credential: &MlsCredential,
     config: &ClientConfig,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
@@ -223,13 +223,13 @@ pub fn mls_generate_key_package(
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ClientIdentifiers {
     pub identity: Identity,
-    pub credential: Credential,
+    pub credential: MlsCredential,
     // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MlsGroupMembers {
-    pub group_id: GroupId,
+pub struct GroupMembers {
+    pub group_id: MlsGroupId,
     pub epoch: u64,
     pub members: Vec<ClientIdentifiers>,
 }
@@ -238,9 +238,9 @@ pub struct MlsGroupMembers {
 //       identities in a group.
 pub fn mls_group_members(
     state: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
-) -> Result<MlsGroupMembers, PlatformError> {
+) -> Result<GroupMembers, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     let group = state.client_default(myself)?.load_group(gid)?;
@@ -264,7 +264,7 @@ pub fn mls_group_members(
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
-    let members = MlsGroupMembers {
+    let members = GroupMembers {
         group_id: gid.to_vec(),
         epoch,
         members,
@@ -281,11 +281,11 @@ pub fn mls_group_members(
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
-    credential: &Credential,
-    gid: Option<&GroupId>,
+    credential: &MlsCredential,
+    gid: Option<&MlsGroupId>,
     group_context_extensions: Option<ExtensionList>,
     config: &ClientConfig,
-) -> Result<GroupId, PlatformError> {
+) -> Result<MlsGroupId, PlatformError> {
     // Build the client
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
@@ -436,7 +436,7 @@ impl<'de> Deserialize<'de> for MlsCommitOutput {
 
 pub fn mls_group_add(
     pstate: &mut PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     new_members: Vec<MlsMessage>,
 ) -> Result<MlsCommitOutput, PlatformError> {
@@ -470,7 +470,7 @@ pub fn mls_group_add(
 
 pub fn mls_group_propose_add(
     pstate: &mut PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     new_members: Vec<MlsMessage>,
 ) -> Result<Vec<MlsMessage>, PlatformError> {
@@ -492,7 +492,7 @@ pub fn mls_group_propose_add(
 ///
 pub fn mls_group_remove(
     pstate: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     removed: &Identity, // TODO: Make this Vec<Identities>?
 ) -> Result<MlsCommitOutput, PlatformError> {
@@ -537,7 +537,7 @@ pub fn mls_group_remove(
 
 pub fn mls_group_propose_remove(
     pstate: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     removed: &Identity, // TODO: Make this Vec<Identities>?
 ) -> Result<MlsMessage, PlatformError> {
@@ -575,10 +575,10 @@ pub fn mls_group_propose_remove(
 /// TODO: Possibly add a random nonce as an optional parameter.
 pub fn mls_group_update(
     pstate: &mut PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     signature_key: Option<&Vec<u8>>,
-    credential: Option<&Credential>,
+    credential: Option<&MlsCredential>,
     group_context_extensions: Option<ExtensionList>,
     config: &ClientConfig,
 ) -> Result<MlsCommitOutput, PlatformError> {
@@ -650,7 +650,7 @@ pub fn mls_group_join(
     myself: &Identity,
     welcome: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
-) -> Result<GroupId, PlatformError> {
+) -> Result<MlsGroupId, PlatformError> {
     let client = pstate.client_default(myself)?;
     let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
     let gid = group.group_id().to_vec();
@@ -669,7 +669,7 @@ pub fn mls_group_join(
 // TODO: Define a custom proposal instead.
 pub fn mls_group_close(
     pstate: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
 ) -> Result<MlsCommitOutput, PlatformError> {
     // Remove everyone from the group.
@@ -712,22 +712,22 @@ pub fn mls_group_close(
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
-pub enum MlsReceived {
+pub enum Received {
     None,
     ApplicationMessage(Vec<u8>),
-    GroupIdEpoch(MlsGroupIdEpoch),
+    GroupIdEpoch(GroupIdEpoch),
     CommitOutput(MlsCommitOutput),
 }
 
 pub fn mls_receive(
     pstate: &PlatformState,
     myself: &Identity,
-    message_or_ack: &MlsMessageOrAck,
-) -> Result<MlsReceived, PlatformError> {
+    message_or_ack: &MessageOrAck,
+) -> Result<Received, PlatformError> {
     // Extract the gid from the Message
     let gid = match &message_or_ack {
-        MlsMessageOrAck::Ack(gid) => gid,
-        MlsMessageOrAck::MlsMessage(message) => match message.group_id() {
+        MessageOrAck::Ack(gid) => gid,
+        MessageOrAck::MlsMessage(message) => match message.group_id() {
             Some(gid) => gid,
             // TODO this could be an error as well
             None => return Err(PlatformError::UnsupportedMessage),
@@ -737,14 +737,14 @@ pub fn mls_receive(
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
     let received_message = match &message_or_ack {
-        MlsMessageOrAck::Ack(_) => group.apply_pending_commit().map(ReceivedMessage::Commit),
-        MlsMessageOrAck::MlsMessage(message) => group.process_incoming_message(message.clone()),
+        MessageOrAck::Ack(_) => group.apply_pending_commit().map(ReceivedMessage::Commit),
+        MessageOrAck::MlsMessage(message) => group.process_incoming_message(message.clone()),
     };
 
     //
     let result = match received_message? {
         ReceivedMessage::ApplicationMessage(app_data_description) => Ok(
-            MlsReceived::ApplicationMessage(app_data_description.data().to_vec()),
+            Received::ApplicationMessage(app_data_description.data().to_vec()),
         ),
         ReceivedMessage::Proposal(_proposal) => {
             // TODO: We inconditionally return the commit for the received proposal
@@ -762,7 +762,7 @@ pub fn mls_receive(
                     .transpose()?,
                 identity: None,
             };
-            Ok(MlsReceived::CommitOutput(commit_output))
+            Ok(Received::CommitOutput(commit_output))
         }
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
@@ -771,24 +771,24 @@ pub fn mls_receive(
                 pstate.delete_group(gid, myself)?;
 
                 // Return the group id and 0xFF..FF epoch to signal the group is closed
-                let group_epoch = MlsGroupIdEpoch {
+                let group_epoch = GroupIdEpoch {
                     group_id: group.group_id().to_vec(),
                     group_epoch: 0xFFFFFFFFFFFFFFFF,
                 };
 
-                Ok(MlsReceived::GroupIdEpoch(group_epoch))
+                Ok(Received::GroupIdEpoch(group_epoch))
             } else {
                 // TODO: Receiving a group_close commit means the sender receiving
                 // is left alone in the group. We should be able delete group automatically.
                 // As of now, the user calling group_close has to delete group manually.
 
                 // If this is a normal commit, return the affected group and new epoch
-                let group_epoch = MlsGroupIdEpoch {
+                let group_epoch = GroupIdEpoch {
                     group_id: group.group_id().to_vec(),
                     group_epoch: group.current_epoch(),
                 };
 
-                Ok(MlsReceived::GroupIdEpoch(group_epoch))
+                Ok(Received::GroupIdEpoch(group_epoch))
             }
         }
         // TODO: We could make this more user friendly by allowing to
@@ -808,7 +808,7 @@ pub fn mls_receive(
 
 pub fn mls_send(
     pstate: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     message: &[u8],
 ) -> Result<MlsMessage, PlatformError> {
@@ -825,7 +825,7 @@ pub fn mls_send(
 ///
 pub fn mls_send_group_context_extension(
     pstate: &PlatformState,
-    gid: GroupId,
+    gid: MlsGroupId,
     myself: &Identity,
     new_gce: Vec<Extension>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
@@ -844,7 +844,7 @@ pub fn mls_send_group_context_extension(
 ///
 pub fn mls_send_custom_proposal(
     pstate: &PlatformState,
-    gid: GroupId,
+    gid: MlsGroupId,
     myself: &Identity,
     proposal_type: ProposalType,
     data: Vec<u8>,
@@ -862,7 +862,7 @@ pub fn mls_send_custom_proposal(
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MlsExporterOutput {
-    pub group_id: GroupId,
+    pub group_id: MlsGroupId,
     pub epoch: u64,
     pub label: Vec<u8>,
     pub context: Vec<u8>,
@@ -871,7 +871,7 @@ pub struct MlsExporterOutput {
 
 pub fn mls_derive_exporter(
     pstate: &PlatformState,
-    gid: &GroupId,
+    gid: &MlsGroupId,
     myself: &Identity,
     label: &[u8],
     context: &[u8],
@@ -900,7 +900,7 @@ pub fn mls_derive_exporter(
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MlsExternalCommitOutput {
-    pub gid: GroupId,
+    pub gid: MlsGroupId,
     pub external_commit: MlsMessage,
 }
 
@@ -979,7 +979,7 @@ impl<'de> Deserialize<'de> for MlsExternalCommitOutput {
 pub fn mls_group_external_commit(
     pstate: &PlatformState,
     myself: &Identity,
-    credential: &Credential,
+    credential: &MlsCredential,
     group_info: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<MlsExternalCommitOutput, PlatformError> {

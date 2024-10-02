@@ -3,9 +3,9 @@
 
 use mls_platform_api::mls_group_propose_remove;
 use mls_platform_api::ClientConfig;
-use mls_platform_api::MlsMessageOrAck;
-use mls_platform_api::MlsReceived;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
+use mls_platform_api::Received;
 
 //
 // Scenario
@@ -134,7 +134,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
@@ -159,9 +159,9 @@ fn main() -> Result<(), PlatformError> {
     let message = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(ciphertext),
+        &MessageOrAck::MlsMessage(ciphertext),
     )?;
-    let MlsReceived::ApplicationMessage(app_msg) = message else {
+    let Received::ApplicationMessage(app_msg) = message else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -189,7 +189,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_2.clone()),
+        &MessageOrAck::MlsMessage(commit_2.clone()),
     )?;
 
     // List the members of the group
@@ -201,7 +201,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_2),
+        &MessageOrAck::MlsMessage(commit_2),
     )?;
 
     // Charlie joins
@@ -222,11 +222,7 @@ fn main() -> Result<(), PlatformError> {
     let commit_3 = commit_3_output.commit;
 
     // Charlie receives the commit
-    mls_platform_api::mls_receive(
-        &state_global,
-        &charlie_id,
-        &MlsMessageOrAck::Ack(gid.to_vec()),
-    )?;
+    mls_platform_api::mls_receive(&state_global, &charlie_id, &MessageOrAck::Ack(gid.to_vec()))?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     println!("Members (charlie, after removing alice): {members:?}");
@@ -236,7 +232,7 @@ fn main() -> Result<(), PlatformError> {
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_3.clone()),
+        &MessageOrAck::MlsMessage(commit_3.clone()),
     )?;
     println!("Members (alice, after receiving alice's removal the group): {members:?}");
     println!("Alice's state for the group has been removed");
@@ -246,7 +242,7 @@ fn main() -> Result<(), PlatformError> {
     let _ = mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_3.clone()),
+        &MessageOrAck::MlsMessage(commit_3.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -275,7 +271,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_4_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_4_output.commit.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
@@ -285,7 +281,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        &MlsMessageOrAck::MlsMessage(commit_4_output.commit),
+        &MessageOrAck::MlsMessage(commit_4_output.commit),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
@@ -322,7 +318,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
+        &MessageOrAck::MlsMessage(external_commit_output.external_commit.clone()),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &diana_id)?;
@@ -332,10 +328,10 @@ fn main() -> Result<(), PlatformError> {
     let ptx = mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(ctx.clone()),
+        &MessageOrAck::MlsMessage(ctx.clone()),
     )?;
 
-    let MlsReceived::ApplicationMessage(app_msg) = ptx else {
+    let Received::ApplicationMessage(app_msg) = ptx else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -349,20 +345,17 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        &MlsMessageOrAck::MlsMessage(external_commit_output.external_commit),
+        &MessageOrAck::MlsMessage(external_commit_output.external_commit),
     )?;
 
     let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
     println!("Members (charlie, after diane joined externally): {members:?}");
 
     // Charlie receives Diana's application message
-    let ptx = mls_platform_api::mls_receive(
-        &state_global,
-        &charlie_id,
-        &MlsMessageOrAck::MlsMessage(ctx),
-    )?;
+    let ptx =
+        mls_platform_api::mls_receive(&state_global, &charlie_id, &MessageOrAck::MlsMessage(ctx))?;
 
-    let MlsReceived::ApplicationMessage(app_msg) = ptx else {
+    let Received::ApplicationMessage(app_msg) = ptx else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -384,14 +377,14 @@ fn main() -> Result<(), PlatformError> {
     let received_5_output = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
-        &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
+        &MessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let MlsReceived::CommitOutput(commit_5_output) = received_5_output else {
+    let Received::CommitOutput(commit_5_output) = received_5_output else {
         panic!("Expected an application message, but received a different type.");
     };
 
-    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
+    let commit_5_msg = MessageOrAck::MlsMessage(commit_5_output.commit);
 
     // Diana processes the remove commit
     println!("\nDiana processes the remove commit");
@@ -405,7 +398,7 @@ fn main() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
-        &MlsMessageOrAck::MlsMessage(self_remove_proposal),
+        &MessageOrAck::MlsMessage(self_remove_proposal),
     )?;
     mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_5_msg)?;
 
@@ -416,7 +409,7 @@ fn main() -> Result<(), PlatformError> {
     println!("\nBob processes the remove commit");
     let received_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
 
-    let MlsReceived::GroupIdEpoch(out_commit_5_bob) = received_5_bob else {
+    let Received::GroupIdEpoch(out_commit_5_bob) = received_5_bob else {
         panic!("Expected a different type.");
     };
 
@@ -435,13 +428,13 @@ fn main() -> Result<(), PlatformError> {
     let commit_output_6_bytes =
         mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
 
-    let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_output_6_bytes.commit);
+    let commit_6_msg = MessageOrAck::MlsMessage(commit_output_6_bytes.commit);
 
     // Diana processes the close commit
     println!("\nDiana processes the close commit");
     let received_6_diana = mls_platform_api::mls_receive(&state_global, &diana_id, &commit_6_msg)?;
 
-    let MlsReceived::GroupIdEpoch(out_commit_6_diana) = received_6_diana else {
+    let Received::GroupIdEpoch(out_commit_6_diana) = received_6_diana else {
         panic!("Expected a different type.");
     };
 

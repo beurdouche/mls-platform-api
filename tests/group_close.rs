@@ -1,9 +1,9 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
-use mls_platform_api::MlsMessageOrAck;
-use mls_platform_api::MlsReceived;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
+use mls_platform_api::Received;
 
 //
 // Scenario
@@ -106,7 +106,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit),
+        &MessageOrAck::MlsMessage(commit_output.commit),
     )?;
 
     // List the members of the group
@@ -131,10 +131,10 @@ fn test_group_close() -> Result<(), PlatformError> {
     let message = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(ciphertext),
+        &MessageOrAck::MlsMessage(ciphertext),
     )?;
 
-    let MlsReceived::ApplicationMessage(app_msg) = message else {
+    let Received::ApplicationMessage(app_msg) = message else {
         panic!("Expected a different type.");
     };
 
@@ -162,7 +162,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(commit_2.clone()),
+        &MessageOrAck::MlsMessage(commit_2.clone()),
     )?;
 
     // List the members of the group
@@ -174,7 +174,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_2),
+        &MessageOrAck::MlsMessage(commit_2),
     )?;
 
     // Charlie joins
@@ -191,7 +191,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     println!("\nCharlie decides that it's enough and closes the group");
     let commit_6_output = mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
 
-    let commit_6_msg = MlsMessageOrAck::MlsMessage(commit_6_output.commit);
+    let commit_6_msg = MessageOrAck::MlsMessage(commit_6_output.commit);
 
     // Alice processes the close commit
     println!("\nAlice processes the close commit");
@@ -209,7 +209,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     println!("Bob's state for the group has been removed");
     // Note: Bob cannot look at its own group state because it was already removed
 
-    let MlsReceived::GroupIdEpoch(groupidepoch_bob) = out_bob.clone() else {
+    let Received::GroupIdEpoch(groupidepoch_bob) = out_bob.clone() else {
         panic!("Expected a different type.");
     };
 

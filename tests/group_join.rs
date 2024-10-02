@@ -1,7 +1,7 @@
 // Copyright (c) 2024 Mozilla Corporation and contributors.
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
-use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MessageOrAck;
 use mls_platform_api::PlatformError;
 
 //
@@ -82,7 +82,7 @@ fn test_group_join() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_output.commit.clone()),
+        &MessageOrAck::MlsMessage(commit_output.commit.clone()),
     )?;
 
     // List the members of the group
