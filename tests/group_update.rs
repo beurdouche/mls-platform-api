@@ -198,7 +198,7 @@ fn test_group_external_join() -> Result<(), PlatformError> {
 
     // Check if Diana is in the members list
     let diana_present = members_diana
-        .members
+        .group_members
         .iter()
         .any(|ClientIdentifiers { identity, .. }| identity == &diana_id);
 

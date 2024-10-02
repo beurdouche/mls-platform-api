@@ -225,7 +225,7 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
 
     // Check if Bob is present in the group
     let bob_present = members_alice
-        .members
+        .group_members
         .iter()
         .any(|ClientIdentifiers { identity, .. }| identity == &bob_id);
 

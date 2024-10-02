@@ -230,8 +230,8 @@ pub struct ClientIdentifiers {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GroupMembers {
     pub group_id: MlsGroupId,
-    pub epoch: u64,
-    pub members: Vec<ClientIdentifiers>,
+    pub group_epoch: u64,
+    pub group_members: Vec<ClientIdentifiers>,
 }
 
 // Note: The identity is needed because it is allowed to have multiple
@@ -266,8 +266,8 @@ pub fn mls_group_members(
 
     let members = GroupMembers {
         group_id: gid.to_vec(),
-        epoch,
-        members,
+        group_epoch: epoch,
+        group_members: members,
     };
 
     Ok(members)

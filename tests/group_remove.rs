@@ -198,7 +198,7 @@ fn test_group_remove() -> Result<(), PlatformError> {
 
     // Check if Alice is still in the members list
     let alice_present = members
-        .members
+        .group_members
         .iter()
         .any(|ClientIdentifiers { identity, .. }| identity == &alice_id);
 
