@@ -52,7 +52,7 @@ fn test_send_receive() -> Result<(), PlatformError> {
     )?;
 
     // Create a group with Alice
-    let gid = mls_platform_api::mls_group_create(
+    let gide = mls_platform_api::mls_group_create(
         &mut state_global,
         &alice_id,
         &alice_cred,
@@ -61,18 +61,22 @@ fn test_send_receive() -> Result<(), PlatformError> {
         &Default::default(),
     )?;
 
-    println!("\nGroup created by Alice: {}", hex::encode(&gid));
+    println!("\nGroup created by Alice: {}", hex::encode(&gide.group_id));
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output =
-        mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
+    let commit_output = mls_platform_api::mls_group_add(
+        &mut state_global,
+        &gide.group_id,
+        &alice_id,
+        vec![bob_kp],
+    )?;
 
     let welcome = commit_output
         .welcome
@@ -97,8 +101,12 @@ fn test_send_receive() -> Result<(), PlatformError> {
     //
     println!("\nBob sends a message to Alice");
     let message_str = "hello";
-    let ciphertext =
-        mls_platform_api::mls_send(&state_global, &gid, &bob_id, message_str.as_bytes())?;
+    let ciphertext = mls_platform_api::mls_send(
+        &state_global,
+        &gide.group_id,
+        &bob_id,
+        message_str.as_bytes(),
+    )?;
 
     // Alice receives the message
     let message = mls_platform_api::mls_receive(

@@ -73,7 +73,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     )?;
 
     // Create a group with Alice
-    let gid = mls_platform_api::mls_group_create(
+    let gide = mls_platform_api::mls_group_create(
         &mut state_global,
         &alice_id,
         &alice_cred,
@@ -82,18 +82,22 @@ fn test_group_close() -> Result<(), PlatformError> {
         &Default::default(),
     )?;
 
-    println!("\nGroup created by Alice: {}", hex::encode(&gid));
+    println!("\nGroup created by Alice: {}", hex::encode(&gide.group_id));
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output =
-        mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
+    let commit_output = mls_platform_api::mls_group_add(
+        &mut state_global,
+        &gide.group_id,
+        &alice_id,
+        vec![bob_kp],
+    )?;
 
     let welcome = commit_output
         .welcome
@@ -110,7 +114,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
@@ -118,14 +122,14 @@ fn test_group_close() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_join(&state_global, &bob_id, &welcome, None)?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &bob_id)?;
     println!("Members (bob, after joining the group): {members:?}");
 
     //
     // Bob sends message to alice
     //
     println!("\nBob sends a message to Alice");
-    let ciphertext = mls_platform_api::mls_send(&state_global, &gid, &bob_id, b"hello")?;
+    let ciphertext = mls_platform_api::mls_send(&state_global, &gide.group_id, &bob_id, b"hello")?;
 
     // Alice receives the message
     let message = mls_platform_api::mls_receive(
@@ -147,8 +151,12 @@ fn test_group_close() -> Result<(), PlatformError> {
     // Bob adds Charlie
     //
     println!("\nBob adds Charlie to the Group");
-    let commit_2_output =
-        mls_platform_api::mls_group_add(&mut state_global, &gid, &bob_id, vec![charlie_kp])?;
+    let commit_2_output = mls_platform_api::mls_group_add(
+        &mut state_global,
+        &gide.group_id,
+        &bob_id,
+        vec![charlie_kp],
+    )?;
 
     let commit_2 = commit_2_output.commit;
     let welcome_2 = commit_2_output
@@ -166,7 +174,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &bob_id)?;
     println!("Members (bob, after adding charlie): {members:?}");
 
     // Alice receives the commit
@@ -182,14 +190,15 @@ fn test_group_close() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_join(&state_global, &charlie_id, &welcome_2, None)?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &charlie_id)?;
     println!("Members (charlie, after joining the group): {members:?}");
 
     //
     // Charlie decides to close the group
     //
     println!("\nCharlie decides that it's enough and closes the group");
-    let commit_6_output = mls_platform_api::mls_group_close(&state_global, &gid, &charlie_id)?;
+    let commit_6_output =
+        mls_platform_api::mls_group_close(&state_global, &gide.group_id, &charlie_id)?;
 
     let commit_6_msg = MessageOrAck::MlsMessage(commit_6_output.commit);
 
@@ -217,12 +226,13 @@ fn test_group_close() -> Result<(), PlatformError> {
     println!("\nCharlie processes the close commit");
     mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_6_msg)?;
 
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &charlie_id)?;
     println!("Members (charlie, after processing their group_close commit): {members:?}");
 
     // Charlie deletes her state for the group
     println!("\nCharlie deletes her state");
-    let out_charlie = mls_platform_api::state_delete_group(&state_global, &gid, &charlie_id)?;
+    let out_charlie =
+        mls_platform_api::state_delete_group(&state_global, &gide.group_id, &charlie_id)?;
 
     println!("Charlie, group deletion confirmation {out_charlie:?}");
 

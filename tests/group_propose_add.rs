@@ -70,7 +70,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     )?;
 
     // Create a group with Alice
-    let gid = mls_platform_api::mls_group_create(
+    let gide = mls_platform_api::mls_group_create(
         &mut state_global,
         &alice_id,
         &alice_cred,
@@ -79,18 +79,22 @@ fn test_propose_add() -> Result<(), PlatformError> {
         &Default::default(),
     )?;
 
-    println!("\nGroup created by Alice: {}", hex::encode(&gid));
+    println!("\nGroup created by Alice: {}", hex::encode(&gide.group_id));
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, before adding bob): {members:?}");
 
     //
     // Alice adds Bob to a group
     //
     println!("\nAlice adds Bob to the Group");
-    let commit_output =
-        mls_platform_api::mls_group_add(&mut state_global, &gid, &alice_id, vec![bob_kp])?;
+    let commit_output = mls_platform_api::mls_group_add(
+        &mut state_global,
+        &gide.group_id,
+        &alice_id,
+        vec![bob_kp],
+    )?;
 
     let welcome = commit_output
         .welcome
@@ -107,7 +111,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
@@ -115,7 +119,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_join(&state_global, &bob_id, &welcome, None)?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &bob_id)?;
     println!("Members (bob, after joining the group): {members:?}");
 
     //
@@ -124,7 +128,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     println!("\nBob proposes to add Charlie to the Group");
     let proposals_add_bytes = mls_platform_api::mls_group_propose_add(
         &mut state_global,
-        &gid,
+        &gide.group_id,
         &bob_id,
         vec![charlie_kp],
     )?;
@@ -152,7 +156,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members_bob = mls_platform_api::mls_group_members(&state_global, &gid, &bob_id)?;
+    let members_bob = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &bob_id)?;
     println!("Members (bob, after adding charlie): {members_bob:?}");
 
     // Alice receives the commit
@@ -164,7 +168,8 @@ fn test_propose_add() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members_alice = mls_platform_api::mls_group_members(&state_global, &gid, &alice_id)?;
+    let members_alice =
+        mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, after adding charlie): {members_alice:?}");
 
     // Extract the welcome from the commit output
@@ -179,7 +184,8 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_group_join(&state_global, &charlie_id, &welcome_5, None)?;
 
     // List the members of the group
-    let members_charlie = mls_platform_api::mls_group_members(&state_global, &gid, &charlie_id)?;
+    let members_charlie =
+        mls_platform_api::mls_group_members(&state_global, &gide.group_id, &charlie_id)?;
     println!("Members (charlie, after joining the group): {members_charlie:?}");
 
     // Test that Alice, Bob and Charlie are in the same group

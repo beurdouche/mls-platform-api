@@ -78,6 +78,12 @@ pub enum PlatformError {
     IOError(#[from] std::io::Error),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GroupIdEpoch {
+    pub group_id: MlsGroupId,
+    pub group_epoch: MlsGroupEpoch,
+}
+
 ///
 /// Generate or Retrieve a PlatformState.
 ///
@@ -143,12 +149,6 @@ impl Default for GroupConfig {
             options: ExtensionList::new(),
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct GroupIdEpoch {
-    pub group_id: MlsGroupId,
-    pub group_epoch: MlsGroupEpoch,
 }
 
 ///
@@ -285,7 +285,7 @@ pub fn mls_group_create(
     gid: Option<&MlsGroupId>,
     group_context_extensions: Option<ExtensionList>,
     config: &ClientConfig,
-) -> Result<MlsGroupId, PlatformError> {
+) -> Result<GroupIdEpoch, PlatformError> {
     // Build the client
     let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
 
@@ -303,9 +303,13 @@ pub fn mls_group_create(
     // The state needs to be returned or stored somewhere
     group.write_to_storage()?;
     let gid = group.group_id().to_vec();
+    let epoch = group.current_epoch();
 
     // Return
-    Ok(gid)
+    Ok(GroupIdEpoch {
+        group_id: gid,
+        group_epoch: epoch,
+    })
 }
 
 ///
@@ -650,16 +654,20 @@ pub fn mls_group_join(
     myself: &Identity,
     welcome: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
-) -> Result<MlsGroupId, PlatformError> {
+) -> Result<GroupIdEpoch, PlatformError> {
     let client = pstate.client_default(myself)?;
     let (mut group, _info) = client.join_group(ratchet_tree, welcome)?;
     let gid = group.group_id().to_vec();
+    let epoch = group.current_epoch();
 
     // Store the state
     group.write_to_storage()?;
 
     // Return the group identifier
-    Ok(gid)
+    Ok(GroupIdEpoch {
+        group_id: gid,
+        group_epoch: epoch,
+    })
 }
 
 ///
