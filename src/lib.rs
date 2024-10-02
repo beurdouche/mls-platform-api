@@ -224,6 +224,7 @@ pub fn mls_generate_key_package(
 pub struct ClientIdentifiers {
     pub identity: Identity,
     pub credential: Credential,
+    // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -231,7 +232,6 @@ pub struct MlsGroupMembers {
     pub group_id: GroupId,
     pub epoch: u64,
     pub members: Vec<ClientIdentifiers>,
-    // TODO: identities: Vec<(Identity, Credential, ExtensionList, Capabilities)>,
 }
 
 // Note: The identity is needed because it is allowed to have multiple
@@ -278,7 +278,6 @@ pub fn mls_group_members(
 ///
 
 // Note: We internally set the protocol version to avoid issues with compat
-
 pub fn mls_group_create(
     pstate: &mut PlatformState,
     myself: &Identity,
@@ -712,11 +711,12 @@ pub fn mls_group_close(
 ///
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct MlsReceived {
-    pub rtype: String,
-    pub group_epoch: Option<MlsGroupEpoch>,
-    pub commit_output: Option<MlsCommitOutput>,
-    pub application_message: Option<Vec<u8>>,
+#[allow(clippy::large_enum_variant)]
+pub enum MlsReceived {
+    None,
+    ApplicationMessage(Vec<u8>),
+    GroupIdEpoch(MlsGroupEpoch),
+    CommitOutput(MlsCommitOutput),
 }
 
 pub fn mls_receive(
@@ -743,12 +743,9 @@ pub fn mls_receive(
 
     //
     let result = match received_message? {
-        ReceivedMessage::ApplicationMessage(app_data_description) => Ok(MlsReceived {
-            rtype: "application_message".to_string(),
-            application_message: Some(app_data_description.data().to_vec()),
-            group_epoch: None,
-            commit_output: None,
-        }),
+        ReceivedMessage::ApplicationMessage(app_data_description) => Ok(
+            MlsReceived::ApplicationMessage(app_data_description.data().to_vec()),
+        ),
         ReceivedMessage::Proposal(_proposal) => {
             // TODO: We inconditionally return the commit for the received proposal
             let commit = group.commit(vec![])?;
@@ -765,12 +762,7 @@ pub fn mls_receive(
                     .transpose()?,
                 identity: None,
             };
-            Ok(MlsReceived {
-                rtype: "commit_output".to_string(),
-                application_message: None,
-                group_epoch: None,
-                commit_output: Some(commit_output),
-            })
+            Ok(MlsReceived::CommitOutput(commit_output))
         }
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
@@ -784,12 +776,7 @@ pub fn mls_receive(
                     epoch: 0xFFFFFFFFFFFFFFFF,
                 };
 
-                Ok(MlsReceived {
-                    rtype: "group_epoch".to_string(),
-                    application_message: None,
-                    group_epoch: Some(group_epoch),
-                    commit_output: None,
-                })
+                Ok(MlsReceived::GroupIdEpoch(group_epoch))
             } else {
                 // TODO: Receiving a group_close commit means the sender receiving
                 // is left alone in the group. We should be able delete group automatically.
@@ -801,12 +788,7 @@ pub fn mls_receive(
                     epoch: group.current_epoch(),
                 };
 
-                Ok(MlsReceived {
-                    rtype: "group_epoch".to_string(),
-                    application_message: None,
-                    group_epoch: Some(group_epoch),
-                    commit_output: None,
-                })
+                Ok(MlsReceived::GroupIdEpoch(group_epoch))
             }
         }
         // TODO: We could make this more user friendly by allowing to

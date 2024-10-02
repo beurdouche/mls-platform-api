@@ -4,6 +4,7 @@
 use mls_platform_api::mls_group_propose_remove;
 use mls_platform_api::ClientIdentifiers;
 use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MlsReceived;
 use mls_platform_api::PlatformError;
 
 //
@@ -175,18 +176,17 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     // Charlie receives the proposal from Bob
     //
     println!("\nCharlie commits to the remove");
-    let commit_5_output = mls_platform_api::mls_receive(
+    let recv_commit_output_5 = mls_platform_api::mls_receive(
         &state_global,
         &charlie_id,
         &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let commit_5_msg = MlsMessageOrAck::MlsMessage(
-        commit_5_output
-            .commit_output
-            .expect("Test: cannot fail!")
-            .commit,
-    );
+    let MlsReceived::CommitOutput(commit_output_5) = recv_commit_output_5 else {
+        panic!("Expected a different type.");
+    };
+
+    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_output_5.commit);
 
     // Alice processes the remove commit
     println!("\nAlice processes the remove commit");
@@ -217,9 +217,9 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
     //     MlsMessageOrAck::MlsMessage(self_remove_proposal),
     // )?;
 
-    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
+    let out_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
 
-    println!("Bob, out_commit_5 {out_commit_5_bob:?}");
+    println!("Bob, out_commit_5 {out_5_bob:?}");
     println!("Bob's state for the group has been removed");
     // Note: Bob cannot look at its own group state because it was already removed
 

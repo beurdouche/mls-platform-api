@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MlsReceived;
 use mls_platform_api::PlatformError;
 
 //
@@ -132,9 +133,14 @@ fn test_group_close() -> Result<(), PlatformError> {
         &alice_id,
         &MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
+
+    let MlsReceived::ApplicationMessage(app_msg) = message else {
+        panic!("Expected a different type.");
+    };
+
     println!(
         "\nAlice receives the message from Bob {:?}",
-        String::from_utf8(message.application_message.expect("Test: cannot fail!")).unwrap()
+        String::from_utf8(app_msg).unwrap()
     );
 
     //
@@ -203,6 +209,10 @@ fn test_group_close() -> Result<(), PlatformError> {
     println!("Bob's state for the group has been removed");
     // Note: Bob cannot look at its own group state because it was already removed
 
+    let MlsReceived::GroupIdEpoch(groupidepoch_bob) = out_bob.clone() else {
+        panic!("Expected a different type.");
+    };
+
     // Charlie processes the close commit
     println!("\nCharlie processes the close commit");
     mls_platform_api::mls_receive(&state_global, &charlie_id, &commit_6_msg)?;
@@ -219,7 +229,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     // Test that Alice, Bob and Charlie have closed their group
     // (checks the group id and epoch are equals)
     assert!(out_alice == out_bob);
-    assert!(out_bob.group_epoch == Some(out_charlie));
+    assert!(groupidepoch_bob == out_charlie);
 
     Ok(())
 }

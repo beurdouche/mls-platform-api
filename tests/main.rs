@@ -4,6 +4,7 @@
 use mls_platform_api::mls_group_propose_remove;
 use mls_platform_api::ClientConfig;
 use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MlsReceived;
 use mls_platform_api::PlatformError;
 
 //
@@ -160,9 +161,13 @@ fn main() -> Result<(), PlatformError> {
         &alice_id,
         &MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
+    let MlsReceived::ApplicationMessage(app_msg) = message else {
+        panic!("Expected an application message, but received a different type.");
+    };
+
     println!(
-        "\nAlice receives the message from Bob {:?}",
-        String::from_utf8(message.application_message.expect("Test: cannot fail!")).unwrap()
+        "\nAlice receives the message from Bob: {:?}",
+        String::from_utf8(app_msg).unwrap()
     );
 
     //
@@ -330,9 +335,13 @@ fn main() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(ctx.clone()),
     )?;
 
+    let MlsReceived::ApplicationMessage(app_msg) = ptx else {
+        panic!("Expected an application message, but received a different type.");
+    };
+
     println!(
         "\nBob receives Diana's message {:?}",
-        String::from_utf8(ptx.application_message.expect("Test: cannot fail!")).unwrap()
+        String::from_utf8(app_msg).unwrap()
     );
 
     // Charlie receives Diana's commit
@@ -353,9 +362,13 @@ fn main() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(ctx),
     )?;
 
+    let MlsReceived::ApplicationMessage(app_msg) = ptx else {
+        panic!("Expected an application message, but received a different type.");
+    };
+
     println!(
         "\nCharlie receives Diana's message {:?}",
-        String::from_utf8(ptx.application_message.expect("Test: cannot fail!")).unwrap()
+        String::from_utf8(app_msg).unwrap()
     );
 
     //
@@ -368,13 +381,17 @@ fn main() -> Result<(), PlatformError> {
     // Diana receives the proposal from Bob
     //
     println!("\nDiana commits to the remove");
-    let commit_5_output = mls_platform_api::mls_receive(
+    let received_5_output = mls_platform_api::mls_receive(
         &state_global,
         &diana_id,
         &MlsMessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit_output.unwrap().commit);
+    let MlsReceived::CommitOutput(commit_5_output) = received_5_output else {
+        panic!("Expected an application message, but received a different type.");
+    };
+
+    let commit_5_msg = MlsMessageOrAck::MlsMessage(commit_5_output.commit);
 
     // Diana processes the remove commit
     println!("\nDiana processes the remove commit");
@@ -397,7 +414,11 @@ fn main() -> Result<(), PlatformError> {
 
     // Bob processes the remove commit
     println!("\nBob processes the remove commit");
-    let out_commit_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
+    let received_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
+
+    let MlsReceived::GroupIdEpoch(out_commit_5_bob) = received_5_bob else {
+        panic!("Expected a different type.");
+    };
 
     println!("Bob, out_commit_5 {out_commit_5_bob:?}");
     println!("Bob's state for the group has been removed");
@@ -418,8 +439,11 @@ fn main() -> Result<(), PlatformError> {
 
     // Diana processes the close commit
     println!("\nDiana processes the close commit");
-    let out_commit_6_diana =
-        mls_platform_api::mls_receive(&state_global, &diana_id, &commit_6_msg)?;
+    let received_6_diana = mls_platform_api::mls_receive(&state_global, &diana_id, &commit_6_msg)?;
+
+    let MlsReceived::GroupIdEpoch(out_commit_6_diana) = received_6_diana else {
+        panic!("Expected a different type.");
+    };
 
     println!("Diana, out_commit_6 {out_commit_6_diana:?}");
     println!("Diana's state for the group has been removed");

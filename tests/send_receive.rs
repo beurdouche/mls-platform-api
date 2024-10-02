@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MlsReceived;
 use mls_platform_api::PlatformError;
 
 //
@@ -106,13 +107,12 @@ fn test_send_receive() -> Result<(), PlatformError> {
         &MlsMessageOrAck::MlsMessage(ciphertext),
     )?;
 
-    let message_2_str = String::from_utf8(
-        message
-            .application_message
-            .expect("Test: cannot fail!")
-            .clone(),
-    )
-    .unwrap();
+    let MlsReceived::ApplicationMessage(app_msg) = message else {
+        panic!("Expected an application message, but received a different type.");
+    };
+
+    let message_2_str = String::from_utf8(app_msg).unwrap();
+
     println!("\nAlice receives the message from Bob {:?}", message_2_str);
 
     assert!(message_str == message_2_str);

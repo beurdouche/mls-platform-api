@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 use mls_platform_api::MlsMessageOrAck;
+use mls_platform_api::MlsReceived;
 use mls_platform_api::PlatformError;
 
 //
@@ -132,25 +133,22 @@ fn test_propose_add() -> Result<(), PlatformError> {
 
     // Alice receives the Add proposal and commits to it
     println!("\nAlice commits to the add");
-    let commit_5_output = mls_platform_api::mls_receive(
+    let recv_commit_output_5 = mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
         &MlsMessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
+
+    let MlsReceived::CommitOutput(commit_output_5) = recv_commit_output_5 else {
+        panic!("Expected a different type.");
+    };
 
     // Bobs process the commit
     println!("\nBob receives the commit");
     mls_platform_api::mls_receive(
         &state_global,
         &bob_id,
-        &MlsMessageOrAck::MlsMessage(
-            commit_5_output
-                .commit_output
-                .clone()
-                .unwrap()
-                .commit
-                .clone(),
-        ),
+        &MlsMessageOrAck::MlsMessage(commit_output_5.commit.clone()),
     )?;
 
     // List the members of the group
@@ -162,7 +160,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     mls_platform_api::mls_receive(
         &state_global,
         &alice_id,
-        &MlsMessageOrAck::MlsMessage(commit_5_output.commit_output.clone().unwrap().commit),
+        &MlsMessageOrAck::MlsMessage(commit_output_5.commit.clone()),
     )?;
 
     // List the members of the group
@@ -170,9 +168,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
     println!("Members (alice, after adding charlie): {members_alice:?}");
 
     // Extract the welcome from the commit output
-    let welcome_5 = commit_5_output
-        .commit_output
-        .expect("Test: cannot fail!")
+    let welcome_5 = commit_output_5
         .welcome
         .first()
         .expect("No welcome messages found")
