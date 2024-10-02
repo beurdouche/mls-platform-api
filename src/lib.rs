@@ -99,13 +99,13 @@ pub fn state_delete_group(
     state: &PlatformState,
     gid: &GroupId,
     myself: &Identity,
-) -> Result<MlsGroupEpoch, PlatformError> {
+) -> Result<MlsGroupIdEpoch, PlatformError> {
     state.delete_group(gid, myself)?;
 
     // Return the group id and 0xFF..FF epoch to signal the group is closed
-    Ok(MlsGroupEpoch {
+    Ok(MlsGroupIdEpoch {
         group_id: gid.to_vec(),
-        epoch: 0xFFFFFFFFFFFFFFFF,
+        group_epoch: 0xFFFFFFFFFFFFFFFF,
     })
 }
 
@@ -146,9 +146,9 @@ impl Default for GroupConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MlsGroupEpoch {
+pub struct MlsGroupIdEpoch {
     pub group_id: GroupId,
-    pub epoch: u64,
+    pub group_epoch: u64,
 }
 
 ///
@@ -715,7 +715,7 @@ pub fn mls_group_close(
 pub enum MlsReceived {
     None,
     ApplicationMessage(Vec<u8>),
-    GroupIdEpoch(MlsGroupEpoch),
+    GroupIdEpoch(MlsGroupIdEpoch),
     CommitOutput(MlsCommitOutput),
 }
 
@@ -771,9 +771,9 @@ pub fn mls_receive(
                 pstate.delete_group(gid, myself)?;
 
                 // Return the group id and 0xFF..FF epoch to signal the group is closed
-                let group_epoch = MlsGroupEpoch {
+                let group_epoch = MlsGroupIdEpoch {
                     group_id: group.group_id().to_vec(),
-                    epoch: 0xFFFFFFFFFFFFFFFF,
+                    group_epoch: 0xFFFFFFFFFFFFFFFF,
                 };
 
                 Ok(MlsReceived::GroupIdEpoch(group_epoch))
@@ -783,9 +783,9 @@ pub fn mls_receive(
                 // As of now, the user calling group_close has to delete group manually.
 
                 // If this is a normal commit, return the affected group and new epoch
-                let group_epoch = MlsGroupEpoch {
+                let group_epoch = MlsGroupIdEpoch {
                     group_id: group.group_id().to_vec(),
-                    epoch: group.current_epoch(),
+                    group_epoch: group.current_epoch(),
                 };
 
                 Ok(MlsReceived::GroupIdEpoch(group_epoch))
