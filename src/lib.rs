@@ -731,7 +731,7 @@ pub fn mls_receive(
     pstate: &PlatformState,
     myself: &Identity,
     message_or_ack: &MessageOrAck,
-) -> Result<Received, PlatformError> {
+) -> Result<(Vec<u8>, Received), PlatformError> {
     // Extract the gid from the Message
     let gid = match &message_or_ack {
         MessageOrAck::Ack(gid) => gid,
@@ -751,9 +751,10 @@ pub fn mls_receive(
 
     //
     let result = match received_message? {
-        ReceivedMessage::ApplicationMessage(app_data_description) => Ok(
+        ReceivedMessage::ApplicationMessage(app_data_description) => Ok((
+            gid.to_vec(),
             Received::ApplicationMessage(app_data_description.data().to_vec()),
-        ),
+        )),
         ReceivedMessage::Proposal(_proposal) => {
             // TODO: We inconditionally return the commit for the received proposal
             let commit = group.commit(vec![])?;
@@ -770,7 +771,7 @@ pub fn mls_receive(
                     .transpose()?,
                 identity: None,
             };
-            Ok(Received::CommitOutput(commit_output))
+            Ok((gid.to_vec(), Received::CommitOutput(commit_output)))
         }
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
@@ -784,7 +785,7 @@ pub fn mls_receive(
                     group_epoch: 0xFFFFFFFFFFFFFFFF,
                 };
 
-                Ok(Received::GroupIdEpoch(group_epoch))
+                Ok((gid.to_vec(), Received::GroupIdEpoch(group_epoch)))
             } else {
                 // TODO: Receiving a group_close commit means the sender receiving
                 // is left alone in the group. We should be able delete group automatically.
@@ -796,7 +797,7 @@ pub fn mls_receive(
                     group_epoch: group.current_epoch(),
                 };
 
-                Ok(Received::GroupIdEpoch(group_epoch))
+                Ok((gid.to_vec(), Received::GroupIdEpoch(group_epoch)))
             }
         }
         // TODO: We could make this more user friendly by allowing to

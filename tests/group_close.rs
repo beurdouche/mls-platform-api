@@ -138,7 +138,7 @@ fn test_group_close() -> Result<(), PlatformError> {
         &MessageOrAck::MlsMessage(ciphertext),
     )?;
 
-    let Received::ApplicationMessage(app_msg) = message else {
+    let (_, Received::ApplicationMessage(app_msg)) = message else {
         panic!("Expected a different type.");
     };
 
@@ -218,7 +218,7 @@ fn test_group_close() -> Result<(), PlatformError> {
     println!("Bob's state for the group has been removed");
     // Note: Bob cannot look at its own group state because it was already removed
 
-    let Received::GroupIdEpoch(groupidepoch_bob) = out_bob.clone() else {
+    let (_, Received::GroupIdEpoch(groupidepoch_bob)) = out_bob.clone() else {
         panic!("Expected a different type.");
     };
 

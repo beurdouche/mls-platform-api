@@ -191,7 +191,7 @@ fn test_group_propose_self_remove() -> Result<(), PlatformError> {
         &MessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let Received::CommitOutput(commit_output_5) = recv_commit_output_5 else {
+    let (_, Received::CommitOutput(commit_output_5)) = recv_commit_output_5 else {
         panic!("Expected a different type.");
     };
 

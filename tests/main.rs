@@ -165,7 +165,7 @@ fn main() -> Result<(), PlatformError> {
         &alice_id,
         &MessageOrAck::MlsMessage(ciphertext),
     )?;
-    let Received::ApplicationMessage(app_msg) = message else {
+    let (_, Received::ApplicationMessage(app_msg)) = message else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -348,7 +348,7 @@ fn main() -> Result<(), PlatformError> {
         &MessageOrAck::MlsMessage(ctx.clone()),
     )?;
 
-    let Received::ApplicationMessage(app_msg) = ptx else {
+    let (_, Received::ApplicationMessage(app_msg)) = ptx else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -372,7 +372,7 @@ fn main() -> Result<(), PlatformError> {
     let ptx =
         mls_platform_api::mls_receive(&state_global, &charlie_id, &MessageOrAck::MlsMessage(ctx))?;
 
-    let Received::ApplicationMessage(app_msg) = ptx else {
+    let (_, Received::ApplicationMessage(app_msg)) = ptx else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -398,7 +398,7 @@ fn main() -> Result<(), PlatformError> {
         &MessageOrAck::MlsMessage(self_remove_proposal.clone()),
     )?;
 
-    let Received::CommitOutput(commit_5_output) = received_5_output else {
+    let (_, Received::CommitOutput(commit_5_output)) = received_5_output else {
         panic!("Expected an application message, but received a different type.");
     };
 
@@ -427,7 +427,7 @@ fn main() -> Result<(), PlatformError> {
     println!("\nBob processes the remove commit");
     let received_5_bob = mls_platform_api::mls_receive(&state_global, &bob_id, &commit_5_msg)?;
 
-    let Received::GroupIdEpoch(out_commit_5_bob) = received_5_bob else {
+    let (_, Received::GroupIdEpoch(out_commit_5_bob)) = received_5_bob else {
         panic!("Expected a different type.");
     };
 
@@ -452,7 +452,7 @@ fn main() -> Result<(), PlatformError> {
     println!("\nDiana processes the close commit");
     let received_6_diana = mls_platform_api::mls_receive(&state_global, &diana_id, &commit_6_msg)?;
 
-    let Received::GroupIdEpoch(out_commit_6_diana) = received_6_diana else {
+    let (_, Received::GroupIdEpoch(out_commit_6_diana)) = received_6_diana else {
         panic!("Expected a different type.");
     };
 

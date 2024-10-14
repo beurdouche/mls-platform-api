@@ -115,7 +115,7 @@ fn test_send_receive() -> Result<(), PlatformError> {
         &MessageOrAck::MlsMessage(ciphertext),
     )?;
 
-    let Received::ApplicationMessage(app_msg) = message else {
+    let (_, Received::ApplicationMessage(app_msg)) = message else {
         panic!("Expected an application message, but received a different type.");
     };
 

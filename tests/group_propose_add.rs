@@ -143,7 +143,7 @@ fn test_propose_add() -> Result<(), PlatformError> {
         &MessageOrAck::MlsMessage(proposal_add_bytes.clone()),
     )?;
 
-    let Received::CommitOutput(commit_output_5) = recv_commit_output_5 else {
+    let (_, Received::CommitOutput(commit_output_5)) = recv_commit_output_5 else {
         panic!("Expected a different type.");
     };
 
