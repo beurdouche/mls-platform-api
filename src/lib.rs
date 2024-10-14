@@ -737,7 +737,6 @@ pub fn mls_receive(
         MessageOrAck::Ack(gid) => gid,
         MessageOrAck::MlsMessage(message) => match message.group_id() {
             Some(gid) => gid,
-            // TODO this could be an error as well
             None => return Err(PlatformError::UnsupportedMessage),
         },
     };
@@ -1025,6 +1024,20 @@ pub fn mls_group_external_commit(
 ///
 /// Utility functions
 ///
+
+pub fn mls_get_group_id(message_or_ack: &MessageOrAck) -> Result<Vec<u8>, PlatformError> {
+    // Extract the gid from the Message
+    let gid = match &message_or_ack {
+        MessageOrAck::Ack(gid) => gid,
+        MessageOrAck::MlsMessage(message) => match message.group_id() {
+            Some(gid) => gid,
+            None => return Err(PlatformError::UnsupportedMessage),
+        },
+    };
+
+    Ok(gid.to_vec())
+}
+
 use serde_json::{Error, Value};
 
 // This function takes a JSON string and converts byte arrays into hex strings.
