@@ -476,20 +476,37 @@ pub fn mls_group_propose_add(
     pstate: &mut PlatformState,
     gid: &MlsGroupId,
     myself: &Identity,
-    new_members: Vec<MlsMessage>,
-) -> Result<Vec<MlsMessage>, PlatformError> {
+    new_member: MlsMessage,
+) -> Result<MlsMessage, PlatformError> {
     let client = pstate.client_default(myself)?;
     let mut group = client.load_group(gid)?;
 
-    let proposals = new_members
-        .into_iter()
-        .map(|member| group.propose_add(member, vec![]))
-        .collect::<Result<_, _>>()?;
-
+    let proposal = group.propose_add(new_member, vec![])?;
     group.write_to_storage()?;
 
-    Ok(proposals)
+    Ok(proposal.clone())
 }
+
+// pub fn mls_group_propose_add(
+//     pstate: &mut PlatformState,
+//     gid: &MlsGroupId,
+//     myself: &Identity,
+//     new_members: Vec<MlsMessage>,
+// ) -> Result<MlsMessage, PlatformError> {
+//     let client = pstate.client_default(myself)?;
+//     let mut group = client.load_group(gid)?;
+
+//     let proposals: Result<Vec<_>, _> = new_members
+//         .into_iter()
+//         .map(|member| group.propose_add(member, vec![]))
+//         .collect();
+//     let proposals = proposals?;
+
+//     let proposal = proposals.first().unwrap();
+//     group.write_to_storage()?;
+
+//     Ok(proposal.clone())
+// }
 
 ///
 /// Group management: Removing a user.

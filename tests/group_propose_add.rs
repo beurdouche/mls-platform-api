@@ -126,14 +126,12 @@ fn test_propose_add() -> Result<(), PlatformError> {
     // Bob propose to add Charlie
     //
     println!("\nBob proposes to add Charlie to the Group");
-    let proposals_add_bytes = mls_platform_api::mls_group_propose_add(
+    let proposal_add_bytes = mls_platform_api::mls_group_propose_add(
         &mut state_global,
         &gide.group_id,
         &bob_id,
-        vec![charlie_kp],
+        charlie_kp,
     )?;
-
-    let proposal_add_bytes = proposals_add_bytes.first().unwrap();
 
     // Alice receives the Add proposal and commits to it
     println!("\nAlice commits to the add");
