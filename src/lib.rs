@@ -487,6 +487,7 @@ pub fn mls_group_propose_add(
     Ok(proposal.clone())
 }
 
+// Variant 1: Vec<MlsMessage>
 // pub fn mls_group_propose_add(
 //     pstate: &mut PlatformState,
 //     gid: &MlsGroupId,
@@ -818,6 +819,74 @@ pub fn mls_receive(
         }
         // TODO: We could make this more user friendly by allowing to
         // pass a Welcome message. KeyPackages should be rejected.
+        _ => Err(PlatformError::UnsupportedMessage),
+    }?;
+
+    // Write the state to storage
+    group.write_to_storage()?;
+
+    Ok(result)
+}
+
+pub fn mls_has_pending_commit(
+    pstate: &PlatformState,
+    gid: &MlsGroupId,
+    myself: &Identity,
+) -> Result<bool, PlatformError> {
+    let group = pstate.client_default(myself)?.load_group(gid)?;
+    let result = group.has_pending_commit();
+    Ok(result)
+}
+
+pub fn mls_clear_pending_commit(
+    pstate: &PlatformState,
+    gid: &MlsGroupId,
+    myself: &Identity,
+) -> Result<bool, PlatformError> {
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
+    group.clear_pending_commit();
+    group.write_to_storage()?;
+    Ok(true)
+}
+
+pub fn mls_apply_pending_commit(
+    pstate: &PlatformState,
+    gid: &MlsGroupId,
+    myself: &Identity,
+) -> Result<Received, PlatformError> {
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
+
+    let received_message = group.apply_pending_commit().map(ReceivedMessage::Commit);
+
+    // Check if the group is active or not after applying the commit
+    let result = match received_message? {
+        ReceivedMessage::Commit(commit) => {
+            // Check if the group is active or not after applying the commit
+            if !commit.state_update.is_active() {
+                // Delete the group from the state of the client
+                pstate.delete_group(gid, myself)?;
+
+                // Return the group id and 0xFF..FF epoch to signal the group is closed
+                let group_epoch = GroupIdEpoch {
+                    group_id: group.group_id().to_vec(),
+                    group_epoch: 0xFFFFFFFFFFFFFFFF,
+                };
+
+                Ok(Received::GroupIdEpoch(group_epoch))
+            } else {
+                // TODO: Receiving a group_close commit means the sender receiving
+                // is left alone in the group. We should be able delete group automatically.
+                // As of now, the user calling group_close has to delete group manually.
+
+                // If this is a normal commit, return the affected group and new epoch
+                let group_epoch = GroupIdEpoch {
+                    group_id: group.group_id().to_vec(),
+                    group_epoch: group.current_epoch(),
+                };
+
+                Ok(Received::GroupIdEpoch(group_epoch))
+            }
+        }
         _ => Err(PlatformError::UnsupportedMessage),
     }?;
 
