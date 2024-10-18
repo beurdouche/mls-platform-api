@@ -17,7 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use state::{PlatformState, TemporaryState};
 use std::fmt;
 
-pub type DefaultCryptoProvider = mls_rs_crypto_nss::NssCryptoProvider;
+pub type DefaultCryptoProvider = mls_rs_crypto_rustcrypto::RustCryptoProvider;
 pub type DefaultIdentityProvider = mls_rs::identity::basic::BasicIdentityProvider;
 
 // Re-export the mls_rs types
@@ -1126,4 +1126,46 @@ pub fn utils_json_bytes_to_string_custom(input_bytes: &[u8]) -> Result<String, P
 
     // Call the original function with the decoded string
     convert_bytes_fields_to_hex(input_str).map_err(|_| PlatformError::JsonConversionError)
+}
+
+#[test]
+fn onetest() {
+    let mut state = PlatformState::new("db.db".into(), [0u8; 32]).unwrap();
+
+    let key_a = mls_generate_signature_keypair(&mut state, CipherSuite::CURVE25519_AES128).unwrap();
+    let cred_a = mls_generate_credential_basic("alice").unwrap();
+
+    let key_b = mls_generate_signature_keypair(&mut state, CipherSuite::CURVE25519_AES128).unwrap();
+    let cred_b = mls_generate_credential_basic("bob").unwrap();
+
+    let key_c = mls_generate_signature_keypair(&mut state, CipherSuite::CURVE25519_AES128).unwrap();
+    let cred_c = mls_generate_credential_basic("carol").unwrap();
+
+    let kp_b =
+        mls_generate_key_package(&state, key_b.clone(), cred_b, ClientConfig::default()).unwrap();
+
+    let g_a = mls_group_create(
+        &mut state,
+        &key_a,
+        cred_a,
+        None,
+        None,
+        ClientConfig::default(),
+    )
+    .unwrap();
+
+    let co1 = mls_group_add(&mut state, &g_a, &key_a, vec![kp_b]).unwrap();
+    let mut co1: MlsCommitOutput = serde_json::from_slice(&co1).unwrap();
+    mls_receive(&state, &key_a, MlsMessageOrAck::MlsMessage(co1.commit)).unwrap();
+    mls_group_join(&state, &key_b, co1.welcome.pop().unwrap(), None).unwrap();
+
+    let kp_c = mls_generate_key_package(&state, key_c, cred_c, ClientConfig::default()).unwrap();
+
+    let p1 = mls_group_propose_add(&mut state, &g_a, &key_b, vec![kp_c])
+        .unwrap()
+        .pop()
+        .unwrap();
+    let co2 = mls_receive(&state, &key_a, MlsMessageOrAck::MlsMessage(p1)).unwrap();
+    let co2: MlsCommitOutput = serde_json::from_slice(&co2).unwrap();
+    mls_receive(&state, &key_a, MlsMessageOrAck::MlsMessage(co2.commit)).unwrap();
 }

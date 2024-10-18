@@ -17,7 +17,7 @@ use mls_rs::{
     CipherSuite, Client, ProtocolVersion,
 };
 
-use crate::ClientConfig;
+use crate::{ClientConfig, DefaultCryptoProvider};
 
 use mls_rs_provider_sqlite::{
     connection_strategy::{
@@ -91,7 +91,8 @@ impl PlatformState {
         version: ProtocolVersion,
         config: ClientConfig,
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
-        let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
+        // let crypto_provider = mls_rs_crypto_nss::NssCryptoProvider::default();
+        let crypto_provider = DefaultCryptoProvider::default();
 
         let engine = self
             .get_sqlite_engine()?

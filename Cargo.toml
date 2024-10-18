@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 
-[features]
-gecko = ["mls-rs-crypto-nss/gecko"]
+#[features]
+#gecko = ["mls-rs-crypto-nss/gecko"]
 
 [dependencies]
 mls-rs =  {git = "https://github.com/beurdouche/mls-rs", rev = "dcb449a933d428da07276677992cae7c19fd5751", features = ["sqlcipher-bundled", "serde"] }
 # mls-rs-core =  {git = "https://github.com/beurdouche/mls-rs", rev = "dcb449a933d428da07276677992cae7c19fd5751"}
-mls-rs-crypto-nss = {git = "https://github.com/beurdouche/mls-rs", rev = "dcb449a933d428da07276677992cae7c19fd5751"}
+# mls-rs-crypto-nss = {git = "https://github.com/beurdouche/mls-rs", rev = "dcb449a933d428da07276677992cae7c19fd5751"}
+mls-rs-crypto-rustcrypto = {git = "https://github.com/beurdouche/mls-rs", rev = "dcb449a933d428da07276677992cae7c19fd5751"}
 mls-rs-provider-sqlite = {git = "https://github.com/beurdouche/mls-rs", rev = "dcb449a933d428da07276677992cae7c19fd5751"}
 hex = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["alloc", "derive", "rc"] }
