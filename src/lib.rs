@@ -26,11 +26,18 @@ pub use mls_rs::MlsMessage;
 pub use mls_rs::ProtocolVersion;
 
 // Define new types
-pub type MlsGroupId = Vec<u8>;
-pub type MlsGroupEpoch = u64;
-pub type MlsCredential = Vec<u8>;
 pub type GroupState = Vec<u8>;
+
+pub type MlsGroupId = Vec<u8>;
+pub type MlsGroupIdArg<'a> = &'a [u8];
+
+pub type MlsGroupEpoch = u64;
+
+pub type MlsCredential = Vec<u8>;
+pub type MlsCredentialArg<'a> = &'a [u8];
+
 pub type Identity = Vec<u8>;
+pub type IdentityArg<'a> = &'a [u8];
 
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -103,8 +110,8 @@ pub fn state_delete(name: &str) -> Result<(), PlatformError> {
 ///
 pub fn state_delete_group(
     state: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
 ) -> Result<GroupIdEpoch, PlatformError> {
     state.delete_group(gid, myself)?;
 
@@ -198,13 +205,14 @@ pub fn mls_generate_signature_keypair(
 ///
 pub fn mls_generate_key_package(
     state: &PlatformState,
-    myself: &Identity,
-    credential: &MlsCredential,
+    myself: IdentityArg,
+    credential: MlsCredentialArg,
     config: &ClientConfig,
     // _randomness: Option<Vec<u8>>,
 ) -> Result<MlsMessage, PlatformError> {
     // Decode the Credential
-    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
+    let mut credential_slice: &[u8] = credential;
+    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential_slice)?;
 
     // Create a client for that state
     let client = state.client(myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
@@ -238,8 +246,8 @@ pub struct GroupMembers {
 //       identities in a group.
 pub fn mls_group_members(
     state: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
 ) -> Result<GroupMembers, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
@@ -280,14 +288,15 @@ pub fn mls_group_members(
 // Note: We internally set the protocol version to avoid issues with compat
 pub fn mls_group_create(
     pstate: &mut PlatformState,
-    myself: &Identity,
-    credential: &MlsCredential,
-    gid: Option<&MlsGroupId>,
+    myself: IdentityArg,
+    credential: MlsCredentialArg,
+    gid: Option<MlsGroupIdArg>,
     group_context_extensions: Option<ExtensionList>,
     config: &ClientConfig,
 ) -> Result<GroupIdEpoch, PlatformError> {
     // Build the client
-    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
+    let mut credential_slice: &[u8] = credential;
+    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential_slice)?;
 
     let client = pstate.client(myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
 
@@ -440,8 +449,8 @@ impl<'de> Deserialize<'de> for MlsCommitOutput {
 
 pub fn mls_group_add(
     pstate: &mut PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
     new_members: Vec<MlsMessage>,
 ) -> Result<MlsCommitOutput, PlatformError> {
     // Get the group from the state
@@ -474,8 +483,8 @@ pub fn mls_group_add(
 
 pub fn mls_group_propose_add(
     pstate: &mut PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
     new_member: MlsMessage,
 ) -> Result<MlsMessage, PlatformError> {
     let client = pstate.client_default(myself)?;
@@ -514,9 +523,9 @@ pub fn mls_group_propose_add(
 ///
 pub fn mls_group_remove(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
-    removed: &Identity, // TODO: Make this Vec<Identities>?
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
+    removed: IdentityArg, // TODO: Make this Vec<Identities>?
 ) -> Result<MlsCommitOutput, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
@@ -559,9 +568,9 @@ pub fn mls_group_remove(
 
 pub fn mls_group_propose_remove(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
-    removed: &Identity, // TODO: Make this Vec<Identities>?
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
+    removed: IdentityArg, // TODO: Make this Vec<Identities>?
 ) -> Result<MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
@@ -597,10 +606,10 @@ pub fn mls_group_propose_remove(
 /// TODO: Possibly add a random nonce as an optional parameter.
 pub fn mls_group_update(
     pstate: &mut PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
-    signature_key: Option<&Vec<u8>>,
-    credential: Option<&MlsCredential>,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
+    signature_key: Option<&[u8]>,
+    credential: Option<MlsCredentialArg>,
     group_context_extensions: Option<ExtensionList>,
     config: &ClientConfig,
 ) -> Result<MlsCommitOutput, PlatformError> {
@@ -609,7 +618,10 @@ pub fn mls_group_update(
     // Propose + Commit
     let decoded_cred = credential
         .as_ref()
-        .map(|credential| mls_rs::identity::Credential::mls_decode(&mut credential.as_slice()))
+        .map(|credential| {
+            let mut credential_slice: &[u8] = credential;
+            mls_rs::identity::Credential::mls_decode(&mut credential_slice)
+        })
         .transpose()?;
 
     let client = pstate.client(myself, decoded_cred, ProtocolVersion::MLS_10, config)?;
@@ -626,12 +638,13 @@ pub fn mls_group_update(
     }
 
     let identity = if let Some((key, cred)) = signature_key.zip(credential) {
-        let signature_secret_key = key.clone().into();
+        let signature_secret_key = key.to_vec().into();
         let signature_public_key = cipher_suite_provider
             .signature_key_derive_public(&signature_secret_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?;
 
-        let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut cred.as_slice())?;
+        let mut credential_slice: &[u8] = cred;
+        let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential_slice)?;
         let signing_identity = SigningIdentity::new(decoded_cred, signature_public_key);
 
         // Return the identity
@@ -639,7 +652,7 @@ pub fn mls_group_update(
             .hash(&signing_identity.signature_key)
             .map_err(|e| PlatformError::CryptoError(e.into_any_error()))?
     } else {
-        myself.clone()
+        myself.to_vec().into()
     };
 
     let commit = commit_builder.build()?;
@@ -669,7 +682,7 @@ pub fn mls_group_update(
 
 pub fn mls_group_join(
     pstate: &PlatformState,
-    myself: &Identity,
+    myself: IdentityArg,
     welcome: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<GroupIdEpoch, PlatformError> {
@@ -695,8 +708,8 @@ pub fn mls_group_join(
 // TODO: Define a custom proposal instead.
 pub fn mls_group_close(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
 ) -> Result<MlsCommitOutput, PlatformError> {
     // Remove everyone from the group.
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
@@ -747,7 +760,7 @@ pub enum Received {
 
 pub fn mls_receive(
     pstate: &PlatformState,
-    myself: &Identity,
+    myself: IdentityArg,
     message_or_ack: &MessageOrAck,
 ) -> Result<(Vec<u8>, Received), PlatformError> {
     // Extract the gid from the Message
@@ -830,8 +843,8 @@ pub fn mls_receive(
 
 pub fn mls_has_pending_commit(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
 ) -> Result<bool, PlatformError> {
     let group = pstate.client_default(myself)?.load_group(gid)?;
     let result = group.has_pending_commit();
@@ -840,8 +853,8 @@ pub fn mls_has_pending_commit(
 
 pub fn mls_clear_pending_commit(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
 ) -> Result<bool, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
     group.clear_pending_commit();
@@ -851,8 +864,8 @@ pub fn mls_clear_pending_commit(
 
 pub fn mls_apply_pending_commit(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
 ) -> Result<Received, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
 
@@ -902,8 +915,8 @@ pub fn mls_apply_pending_commit(
 
 pub fn mls_send(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
     message: &[u8],
 ) -> Result<MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(gid)?;
@@ -919,8 +932,8 @@ pub fn mls_send(
 ///
 pub fn mls_send_group_context_extension(
     pstate: &PlatformState,
-    gid: MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
     new_gce: Vec<Extension>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
     let mut group = pstate.client_default(myself)?.load_group(&gid)?;
@@ -938,8 +951,8 @@ pub fn mls_send_group_context_extension(
 ///
 pub fn mls_send_custom_proposal(
     pstate: &PlatformState,
-    gid: MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
     proposal_type: ProposalType,
     data: Vec<u8>,
 ) -> Result<mls_rs::MlsMessage, PlatformError> {
@@ -965,8 +978,8 @@ pub struct ExporterOutput {
 
 pub fn mls_derive_exporter(
     pstate: &PlatformState,
-    gid: &MlsGroupId,
-    myself: &Identity,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
     label: &[u8],
     context: &[u8],
     len: u64,
@@ -1072,12 +1085,16 @@ impl<'de> Deserialize<'de> for MlsExternalCommitOutput {
 
 pub fn mls_group_external_commit(
     pstate: &PlatformState,
-    myself: &Identity,
-    credential: &MlsCredential,
+    myself: IdentityArg,
+    credential: MlsCredentialArg,
     group_info: &MlsMessage,
     ratchet_tree: Option<ExportedTree<'static>>,
 ) -> Result<MlsExternalCommitOutput, PlatformError> {
-    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential.as_slice())?;
+    // Clone the credential to avoid mutating the original
+    let mut credential_slice: &[u8] = credential;
+
+    // Decode the credential
+    let decoded_cred = mls_rs::identity::Credential::mls_decode(&mut credential_slice)?;
 
     let client = pstate.client(
         myself,

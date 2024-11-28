@@ -81,7 +81,7 @@ impl PlatformState {
 
     pub fn client(
         &self,
-        myself_identifier: &Identity,
+        myself_identifier: &[u8],
         myself_credential: Option<Credential>,
         version: ProtocolVersion,
         config: &ClientConfig,
@@ -144,7 +144,7 @@ impl PlatformState {
 
     pub fn client_default(
         &self,
-        myself_identifier: &Identity,
+        myself_identifier: &[u8],
     ) -> Result<Client<impl MlsConfig>, PlatformError> {
         self.client(
             myself_identifier,
@@ -159,7 +159,7 @@ impl PlatformState {
         myself_sigkey: &SignatureSecretKey,
         myself_pubkey: &SignaturePublicKey,
         cs: CipherSuite,
-        identifier: &Identity,
+        identifier: &[u8],
     ) -> Result<(), PlatformError> {
         let signature_data = SignatureData {
             public_key: myself_pubkey.to_vec(),
@@ -173,11 +173,7 @@ impl PlatformState {
         Ok(())
     }
 
-    fn store_sigdata(
-        &self,
-        identifier: &Identity,
-        data: &SignatureData,
-    ) -> Result<(), PlatformError> {
+    fn store_sigdata(&self, identifier: &[u8], data: &SignatureData) -> Result<(), PlatformError> {
         let data = bincode::serialize(&data)?;
         let engine = self.get_sqlite_engine()?;
 
@@ -224,7 +220,7 @@ impl PlatformState {
             .map_err(|e| PlatformError::StorageError(e.into_any_error()))
     }
 
-    pub fn delete_group(&self, gid: &[u8], identifier: &Identity) -> Result<(), PlatformError> {
+    pub fn delete_group(&self, gid: &[u8], identifier: &[u8]) -> Result<(), PlatformError> {
         let storage = self
             .get_sqlite_engine()?
             .with_context(identifier.to_vec())
