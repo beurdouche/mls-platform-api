@@ -171,7 +171,7 @@ pub fn mls_generate_credential_basic(content: &[u8]) -> Result<MlsCredential, Pl
 ///
 /// Generate a Signature Keypair
 ///
-pub fn mls_generate_signature_keypair(
+pub fn mls_generate_identity(
     state: &PlatformState,
     cs: CipherSuite,
     // _randomness: Option<Vec<u8>>,
@@ -236,7 +236,7 @@ pub struct ClientIdentifiers {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct GroupMembers {
+pub struct GroupDetails {
     pub group_id: MlsGroupId,
     pub group_epoch: u64,
     pub group_members: Vec<ClientIdentifiers>,
@@ -244,11 +244,11 @@ pub struct GroupMembers {
 
 // Note: The identity is needed because it is allowed to have multiple
 //       identities in a group.
-pub fn mls_group_members(
+pub fn mls_group_details(
     state: &PlatformState,
     gid: MlsGroupIdArg,
     myself: IdentityArg,
-) -> Result<GroupMembers, PlatformError> {
+) -> Result<GroupDetails, PlatformError> {
     let crypto_provider = DefaultCryptoProvider::default();
 
     let group = state.client_default(myself)?.load_group(gid)?;
@@ -272,13 +272,13 @@ pub fn mls_group_members(
         })
         .collect::<Result<Vec<_>, PlatformError>>()?;
 
-    let members = GroupMembers {
+    let group_details = GroupDetails {
         group_id: gid.to_vec(),
         group_epoch: epoch,
         group_members: members,
     };
 
-    Ok(members)
+    Ok(group_details)
 }
 
 ///
@@ -841,6 +841,17 @@ pub fn mls_receive(
     Ok(result)
 }
 
+pub fn mls_clear_pending_proposals(
+    pstate: &PlatformState,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
+) -> Result<bool, PlatformError> {
+    let mut group = pstate.client_default(myself)?.load_group(gid)?;
+    group.clear_proposal_cache();
+    group.write_to_storage()?;
+    Ok(true)
+}
+
 pub fn mls_has_pending_commit(
     pstate: &PlatformState,
     gid: MlsGroupIdArg,
@@ -1141,53 +1152,14 @@ pub fn mls_get_group_id(message_or_ack: &MessageOrAck) -> Result<Vec<u8>, Platfo
     Ok(gid.to_vec())
 }
 
-use serde_json::{Error, Value};
+pub fn mls_get_group_epoch(message_or_ack: &MessageOrAck) -> Result<u64, PlatformError> {
+    let group_epoch: Option<u64> = match &message_or_ack {
+        MessageOrAck::MlsMessage(message) => message.epoch(),
+        _ => None,
+    };
 
-// This function takes a JSON string and converts byte arrays into hex strings.
-fn convert_bytes_fields_to_hex(input_str: &str) -> Result<String, Error> {
-    // Parse the JSON string into a serde_json::Value
-    let mut value: Value = serde_json::from_str(input_str)?;
-
-    // Recursive function to process each element
-    fn process_element(element: &mut Value) {
-        match element {
-            Value::Array(ref mut vec) => {
-                if vec
-                    .iter()
-                    .all(|x| matches!(x, Value::Number(n) if n.is_u64()))
-                {
-                    // Convert all elements to a Vec<u8> if they are numbers
-                    let bytes: Vec<u8> = vec
-                        .iter()
-                        .filter_map(|x| x.as_u64().map(|n| n as u8))
-                        .collect();
-                    // Check if the conversion makes sense (the length matches)
-                    if bytes.len() == vec.len() {
-                        *element = Value::String(hex::encode(bytes));
-                    } else {
-                        vec.iter_mut().for_each(process_element);
-                    }
-                } else {
-                    vec.iter_mut().for_each(process_element);
-                }
-            }
-            Value::Object(ref mut map) => {
-                map.values_mut().for_each(process_element);
-            }
-            _ => {}
-        }
-    }
-    // Process the element and return the new Json string
-    process_element(&mut value);
-    serde_json::to_string(&value)
+    Ok(group_epoch.expect("Group epoch not found"))
 }
 
-// This function accepts bytes, converts them to a string, and then processes the string.
-pub fn utils_json_bytes_to_string_custom(input_bytes: &[u8]) -> Result<String, PlatformError> {
-    // Convert input bytes to a string
-    let input_str =
-        std::str::from_utf8(input_bytes).map_err(|_| PlatformError::JsonConversionError)?;
-
-    // Call the original function with the decoded string
-    convert_bytes_fields_to_hex(input_str).map_err(|_| PlatformError::JsonConversionError)
-}
+// TODO:
+// - Is key available for the message ?

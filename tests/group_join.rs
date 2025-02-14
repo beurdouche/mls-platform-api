@@ -32,10 +32,9 @@ fn test_group_join() -> Result<(), PlatformError> {
 
     // Create signature keypairs and store them in the state
     let alice_id =
-        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
+        mls_platform_api::mls_generate_identity(&state_global, group_config.ciphersuite)?;
 
-    let bob_id =
-        mls_platform_api::mls_generate_signature_keypair(&state_global, group_config.ciphersuite)?;
+    let bob_id = mls_platform_api::mls_generate_identity(&state_global, group_config.ciphersuite)?;
 
     println!("\nAlice identifier: {}", hex::encode(&alice_id));
     println!("Bob identifier: {}", hex::encode(&bob_id));
@@ -61,7 +60,7 @@ fn test_group_join() -> Result<(), PlatformError> {
     println!("\nGroup created by Alice: {}", hex::encode(&gide.group_id));
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
+    let members = mls_platform_api::mls_group_details(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, before adding bob): {members:?}");
 
     //
@@ -90,7 +89,7 @@ fn test_group_join() -> Result<(), PlatformError> {
     )?;
 
     // List the members of the group
-    let members = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &alice_id)?;
+    let members = mls_platform_api::mls_group_details(&state_global, &gide.group_id, &alice_id)?;
     println!("Members (alice, after adding bob): {members:?}");
 
     // Bob joins
@@ -98,7 +97,7 @@ fn test_group_join() -> Result<(), PlatformError> {
     let gide_2 = mls_platform_api::mls_group_join(&state_global, &bob_id, &welcome, None)?;
 
     // List the members of the group
-    let members_2 = mls_platform_api::mls_group_members(&state_global, &gide.group_id, &bob_id)?;
+    let members_2 = mls_platform_api::mls_group_details(&state_global, &gide.group_id, &bob_id)?;
     println!("Members (bob, after joining the group): {members_2:?}");
 
     // Assert that the group identifier is the same for Alice and Bob
