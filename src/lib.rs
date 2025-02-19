@@ -5,7 +5,7 @@ mod state;
 
 use mls_rs::error::{AnyError, IntoAnyError};
 use mls_rs::group::proposal::{CustomProposal, ProposalType};
-use mls_rs::group::{Capabilities, ExportedTree, ReceivedMessage};
+use mls_rs::group::{Capabilities, CommitEffect, ExportedTree, ReceivedMessage};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::mls_rs_codec::{MlsDecode, MlsEncode};
 use mls_rs::{CipherSuiteProvider, CryptoProvider, Extension, ExtensionList};
@@ -218,7 +218,11 @@ pub fn mls_generate_key_package(
     let client = state.client(myself, Some(decoded_cred), ProtocolVersion::MLS_10, config)?;
 
     // Generate a KeyPackage from that client_default
-    let key_package = client.generate_key_package_message()?;
+    let key_package_extensions = config.key_package_extensions.clone().unwrap_or_default();
+    let leaf_node_extensions = config.leaf_node_extensions.clone().unwrap_or_default();
+
+    let key_package =
+        client.generate_key_package_message(key_package_extensions, leaf_node_extensions)?;
 
     // Result
     Ok(key_package)
@@ -305,8 +309,12 @@ pub fn mls_group_create(
         Some(gid) => client.create_group_with_id(
             gid.to_vec(),
             group_context_extensions.unwrap_or_default().clone(),
+            config.leaf_node_extensions.clone().unwrap_or_default(),
         )?,
-        None => client.create_group(group_context_extensions.unwrap_or_default().clone())?,
+        None => client.create_group(
+            group_context_extensions.unwrap_or_default().clone(),
+            config.leaf_node_extensions.clone().unwrap_or_default(),
+        )?,
     };
 
     // The state needs to be returned or stored somewhere
@@ -637,6 +645,10 @@ pub fn mls_group_update(
         commit_builder = commit_builder.set_group_context_ext(group_context_extensions)?;
     }
 
+    if let Some(leaf_node_extensions) = config.leaf_node_extensions.clone() {
+        commit_builder = commit_builder.set_leaf_node_extensions(leaf_node_extensions);
+    }
+
     let identity = if let Some((key, cred)) = signature_key.zip(credential) {
         let signature_secret_key = key.to_vec().into();
         let signature_public_key = cipher_suite_provider
@@ -805,29 +817,32 @@ pub fn mls_receive(
         }
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
-            if !commit.state_update.is_active() {
-                // Delete the group from the state of the client
-                pstate.delete_group(gid, myself)?;
+            match commit.effect {
+                CommitEffect::Removed { .. } => {
+                    // Delete the group from the state of the client
+                    pstate.delete_group(gid, myself)?;
 
-                // Return the group id and 0xFF..FF epoch to signal the group is closed
-                let group_epoch = GroupIdEpoch {
-                    group_id: group.group_id().to_vec(),
-                    group_epoch: 0xFFFFFFFFFFFFFFFF,
-                };
+                    // Return the group id and 0xFF..FF epoch to signal the group is closed
+                    let group_epoch = GroupIdEpoch {
+                        group_id: group.group_id().to_vec(),
+                        group_epoch: 0xFFFFFFFFFFFFFFFF,
+                    };
 
-                Ok((gid.to_vec(), Received::GroupIdEpoch(group_epoch)))
-            } else {
-                // TODO: Receiving a group_close commit means the sender receiving
-                // is left alone in the group. We should be able delete group automatically.
-                // As of now, the user calling group_close has to delete group manually.
+                    Ok((gid.to_vec(), Received::GroupIdEpoch(group_epoch)))
+                }
+                _ => {
+                    // TODO: Receiving a group_close commit means the sender receiving
+                    // is left alone in the group. We should be able delete group automatically.
+                    // As of now, the user calling group_close has to delete group manually.
 
-                // If this is a normal commit, return the affected group and new epoch
-                let group_epoch = GroupIdEpoch {
-                    group_id: group.group_id().to_vec(),
-                    group_epoch: group.current_epoch(),
-                };
+                    // If this is a normal commit, return the affected group and new epoch
+                    let group_epoch = GroupIdEpoch {
+                        group_id: group.group_id().to_vec(),
+                        group_epoch: group.current_epoch(),
+                    };
 
-                Ok((gid.to_vec(), Received::GroupIdEpoch(group_epoch)))
+                    Ok((gid.to_vec(), Received::GroupIdEpoch(group_epoch)))
+                }
             }
         }
         // TODO: We could make this more user friendly by allowing to
@@ -886,29 +901,32 @@ pub fn mls_apply_pending_commit(
     let result = match received_message? {
         ReceivedMessage::Commit(commit) => {
             // Check if the group is active or not after applying the commit
-            if !commit.state_update.is_active() {
-                // Delete the group from the state of the client
-                pstate.delete_group(gid, myself)?;
+            match commit.effect {
+                CommitEffect::Removed { .. } => {
+                    // Delete the group from the state of the client
+                    pstate.delete_group(gid, myself)?;
 
-                // Return the group id and 0xFF..FF epoch to signal the group is closed
-                let group_epoch = GroupIdEpoch {
-                    group_id: group.group_id().to_vec(),
-                    group_epoch: 0xFFFFFFFFFFFFFFFF,
-                };
+                    // Return the group id and 0xFF..FF epoch to signal the group is closed
+                    let group_epoch = GroupIdEpoch {
+                        group_id: group.group_id().to_vec(),
+                        group_epoch: 0xFFFFFFFFFFFFFFFF,
+                    };
 
-                Ok(Received::GroupIdEpoch(group_epoch))
-            } else {
-                // TODO: Receiving a group_close commit means the sender receiving
-                // is left alone in the group. We should be able delete group automatically.
-                // As of now, the user calling group_close has to delete group manually.
+                    Ok(Received::GroupIdEpoch(group_epoch))
+                }
+                _ => {
+                    // TODO: Receiving a group_close commit means the sender receiving
+                    // is left alone in the group. We should be able delete group automatically.
+                    // As of now, the user calling group_close has to delete group manually.
 
-                // If this is a normal commit, return the affected group and new epoch
-                let group_epoch = GroupIdEpoch {
-                    group_id: group.group_id().to_vec(),
-                    group_epoch: group.current_epoch(),
-                };
+                    // If this is a normal commit, return the affected group and new epoch
+                    let group_epoch = GroupIdEpoch {
+                        group_id: group.group_id().to_vec(),
+                        group_epoch: group.current_epoch(),
+                    };
 
-                Ok(Received::GroupIdEpoch(group_epoch))
+                    Ok(Received::GroupIdEpoch(group_epoch))
+                }
             }
         }
         _ => Err(PlatformError::UnsupportedMessage),
