@@ -7,17 +7,17 @@ use mls_platform_api::PlatformError;
 //
 // Scenario
 //
-// * Alice, Bob, Charlie and Diana create signing identity (generate_signature_keypair)
-// * Alice, Bob, Charlie and Diana create credentials (generate_credential_basic)
+// * Alice, Bob and Charlie create signing identity (generate_signature_keypair)
+// * Alice, Bob and Charlie create credentials (generate_credential_basic)
 // * Bob and Charlie create key packages (generate_key_package)
 // * Alice creates a group (group_create)
 // * Alice adds Bob to the group (group_add)
 //   - Alice has a pending commit and cannot do another operation
-// * Alice discards the pending commit
+// * Alice clears the pending commit
 // * Alice can add Charlie to the group
 
 #[test]
-fn test_discard_pending() -> Result<(), PlatformError> {
+fn test_clear_pending_commit() -> Result<(), PlatformError> {
     // Default group configuration
     let group_config = mls_platform_api::GroupConfig::default();
 
