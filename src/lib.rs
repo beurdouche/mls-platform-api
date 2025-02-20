@@ -856,6 +856,16 @@ pub fn mls_receive(
     Ok(result)
 }
 
+pub fn mls_has_pending_proposals(
+    pstate: &PlatformState,
+    gid: MlsGroupIdArg,
+    myself: IdentityArg,
+) -> Result<bool, PlatformError> {
+    let group = pstate.client_default(myself)?.load_group(gid)?;
+    let result = group.commit_required();
+    Ok(result)
+}
+
 pub fn mls_clear_pending_proposals(
     pstate: &PlatformState,
     gid: MlsGroupIdArg,
